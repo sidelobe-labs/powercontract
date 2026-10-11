@@ -52,7 +52,7 @@ PowerContract accepts this as a single multi-channel CSV through the source+unit
 
 The WaveAce 1000/2000 manual describes CSV output containing `Source`, `Second`, and `Volt`, with optional fields such as record length, sample interval, units, scale, model, serial number, and software version.
 
-PowerContract accepts the source+units waveform table. This parser is format-tested; it has not been tested against a physical WaveAce in this project.
+PowerContract accepts the two-row source+units waveform table described above. This parser has not been tested against a physical WaveAce in this project. WaveAce's optional parameter-save mode can add metadata, so inspect the first lines of the exported file before assuming it matches this layout.
 
 ## Rigol
 
