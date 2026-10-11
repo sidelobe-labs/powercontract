@@ -17,9 +17,9 @@ _EVENT_KEYS = {"signal", "direction", "threshold", "stable_for"}
 _REQUIREMENT_KEYS = {
     "delay": {"id", "type", "from", "to", "min", "max", "uncertainty"},
     "max_value": {"id", "type", "signal", "value", "from", "to", "uncertainty"},
-    "min_value": {"id", "type", "signal", "value", "from", "to"},
+    "min_value": {"id", "type", "signal", "value", "from", "to", "uncertainty"},
     "rise_time": {"id", "type", "signal", "low", "high", "max", "uncertainty"},
-    "fall_time": {"id", "type", "signal", "low", "high", "max"},
+    "fall_time": {"id", "type", "signal", "low", "high", "max", "uncertainty"},
 }
 
 
