@@ -147,6 +147,10 @@ pytest
 
 CI runs the test suite on Python 3.11 and 3.12, builds the package, runs `twine check`, and installs the built wheel in a clean virtual environment.
 
+## Contributing
+
+See [CONTRIBUTING.md](https://github.com/sidelobe-labs/powercontract/blob/main/CONTRIBUTING.md). Security issues should follow [SECURITY.md](https://github.com/sidelobe-labs/powercontract/blob/main/SECURITY.md).
+
 ## License
 
 MIT. See [LICENSE](https://github.com/sidelobe-labs/powercontract/blob/main/LICENSE).
