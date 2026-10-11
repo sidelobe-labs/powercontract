@@ -306,7 +306,7 @@ def test_siglent_group_rejects_mismatched_time_axes(tmp_path):
         "requirements": [{"id": "A", "type": "max_value", "signal": "a", "value": 6}],
     })
     ch1 = write_siglent_trace(tmp_path, "CH1", "0,0\n0.001,1")
-    ch2 = write_siglent_trace(tmp_path, "CH2", "0,0\n0.002,1")
+    ch2 = write_siglent_trace(tmp_path, "CH2", "0.0005,0\n0.0015,1")
     with pytest.raises(CaptureError, match="same time axis"):
         load_capture(ch1, c, [ch2])
 
@@ -533,3 +533,63 @@ def test_fall_time_accepts_duration_uncertainty(tmp_path):
     )
     finding = evaluate(c, load_capture(path, c)).findings[0]
     assert finding.uncertainty == pytest.approx(0.0005)
+
+
+def test_siglent_csv_rejects_sample_interval_mismatch(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Second"},
+        "signals": {"a": {"column": "CH1"}},
+        "events": {},
+        "requirements": [{"id": "A", "type": "max_value", "signal": "a", "value": 6}],
+    })
+    path = write_siglent_trace(tmp_path, "CH1", "0,0\n0.002,1")
+    with pytest.raises(CaptureError, match="metadata declares"):
+        load_capture(path, c)
+
+
+def test_siglent_csv_rejects_duplicate_metadata_fields(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Second"},
+        "signals": {"a": {"column": "CH1"}},
+        "events": {},
+        "requirements": [{"id": "A", "type": "max_value", "signal": "a", "value": 6}],
+    })
+    path = write_siglent_trace(tmp_path, "CH1", "0,0\n0.001,1")
+    content = path.read_text(encoding="utf-8")
+    path.write_text(content.replace("Source,CH1\n", "Source,CH1\nSource,CH1\n"), encoding="utf-8")
+    with pytest.raises(CaptureError, match="duplicate Siglent metadata field"):
+        load_capture(path, c)
+
+
+def test_siglent_group_rejects_different_instrument_identity(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Second"},
+        "signals": {"a": {"column": "CH1"}, "b": {"column": "CH2"}},
+        "events": {},
+        "requirements": [{"id": "A", "type": "max_value", "signal": "a", "value": 6}],
+    })
+    ch1 = write_siglent_trace(tmp_path, "CH1", "0,0\n0.001,1")
+    ch2 = write_siglent_trace(tmp_path, "CH2", "0,0\n0.001,1")
+    ch2.write_text(
+        ch2.read_text(encoding="utf-8").replace("Serial Number,TEST", "Serial Number,OTHER"),
+        encoding="utf-8",
+    )
+    with pytest.raises(CaptureError, match="Serial Number"):
+        load_capture(ch1, c, [ch2])
+
+
+def test_siglent_group_validates_extra_supplied_sources(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Second"},
+        "signals": {"a": {"column": "CH1"}},
+        "events": {},
+        "requirements": [{"id": "A", "type": "max_value", "signal": "a", "value": 6}],
+    })
+    ch1 = write_siglent_trace(tmp_path, "CH1", "0,0\n0.001,1")
+    ch2 = write_siglent_trace(tmp_path, "CH2", "0.0005,0\n0.0015,1")
+    with pytest.raises(CaptureError, match="same time axis"):
+        load_capture(ch1, c, [ch2])
