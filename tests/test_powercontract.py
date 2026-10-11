@@ -484,3 +484,52 @@ def test_contract_rejects_negative_voltage_uncertainty():
                 "uncertainty": -0.01,
             }],
         })
+
+
+def test_min_value_accepts_uncertainty(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1"}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-MIN",
+            "type": "min_value",
+            "signal": "vdd",
+            "value": 3.0,
+            "uncertainty": 0.05,
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text("Time,C1\n0,3.10\n0.001,3.10\n", encoding="utf-8")
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.status == "PASS"
+    assert finding.margin == pytest.approx(0.05)
+
+
+def test_fall_time_accepts_duration_uncertainty(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1", "nominal": 3.3}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-FALL",
+            "type": "fall_time",
+            "signal": "vdd",
+            "max": "4ms",
+            "uncertainty": "0.5ms",
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text(
+        "Time,C1\n"
+        "0,3.3\n"
+        "0.001,3.0\n"
+        "0.002,2.0\n"
+        "0.003,1.0\n"
+        "0.004,0.2\n",
+        encoding="utf-8",
+    )
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.uncertainty == pytest.approx(0.0005)
