@@ -235,3 +235,110 @@ def test_contract_rejects_boolean_numeric_values():
                 "value": True,
             }],
         })
+
+
+def write_siglent_trace(tmp_path: Path, source: str, rows: str) -> Path:
+    path = tmp_path / f"usr_wf_{source}_data.csv"
+    count = len([line for line in rows.splitlines() if line.strip()])
+    path.write_text(
+        "\n".join([
+            f"Record Length,Analog:{count}",
+            "Sample Interval,1.000000E-03",
+            "Vertical Units,V,",
+            "Vertical Scale,+2.000000E+00",
+            "Vertical Offset,+0.000000E+00",
+            "Horizontal Units,s",
+            "Horizontal Scale,+5.000000E-03",
+            "Model,SDS824X HD",
+            "Serial Number,TEST",
+            "Software Version,3.8.12.1.1.6.5",
+            f"Source,{source}",
+            "Second,Value",
+            rows,
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    return path
+
+
+def test_loads_realistic_siglent_per_channel_csv_group(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Second"},
+        "signals": {
+            "vin": {"column": "CH1", "nominal": 5.0},
+            "vdd": {"column": "CH2", "nominal": 3.3},
+            "reset": {"column": "CH3", "nominal": 3.3},
+        },
+        "events": {
+            "vdd_valid": {"signal": "vdd", "direction": "above", "threshold": 3.0},
+            "reset_release": {"signal": "reset", "direction": "above", "threshold": 1.5},
+        },
+        "requirements": [{
+            "id": "ORDER",
+            "type": "delay",
+            "from": "vdd_valid",
+            "to": "reset_release",
+            "min": "0ms",
+        }],
+    })
+    ch1 = write_siglent_trace(tmp_path, "CH1", "-0.002,0.5\n-0.001,1.0\n0,3.0\n0.001,5.0")
+    ch2 = write_siglent_trace(tmp_path, "CH2", "-0.002,0\n-0.001,0.5\n0,2.0\n0.001,3.3")
+    ch3 = write_siglent_trace(tmp_path, "CH3", "-0.002,0\n-0.001,0\n0,1.0\n0.001,3.3")
+
+    capture = load_capture(ch1, c, [ch2, ch3])
+    assert capture.time == (-0.002, -0.001, 0.0, 0.001)
+    assert capture.signals["vin"][-1] == pytest.approx(5.0)
+    assert capture.signals["vdd"][-1] == pytest.approx(3.3)
+    assert capture.signals["reset"][-1] == pytest.approx(3.3)
+
+
+def test_siglent_group_rejects_mismatched_time_axes(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Second"},
+        "signals": {
+            "a": {"column": "CH1"},
+            "b": {"column": "CH2"},
+        },
+        "events": {},
+        "requirements": [{"id": "A", "type": "max_value", "signal": "a", "value": 6}],
+    })
+    ch1 = write_siglent_trace(tmp_path, "CH1", "0,0\n0.001,1")
+    ch2 = write_siglent_trace(tmp_path, "CH2", "0,0\n0.002,1")
+    with pytest.raises(CaptureError, match="same time axis"):
+        load_capture(ch1, c, [ch2])
+
+
+def test_rise_time_pairs_low_threshold_with_same_completed_edge(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vin": {"column": "C1", "nominal": 5.0}},
+        "events": {},
+        "requirements": [{
+            "id": "VIN-RISE",
+            "type": "rise_time",
+            "signal": "vin",
+            "low": 0.1,
+            "high": 0.9,
+            "max": "10ms",
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text(
+        "Time,C1\n"
+        "-0.010,0.45\n"
+        "-0.009,0.55\n"
+        "-0.008,0.45\n"
+        "-0.001,0.45\n"
+        "0.000,0.60\n"
+        "0.003,2.50\n"
+        "0.007,4.60\n",
+        encoding="utf-8",
+    )
+    result = evaluate(c, load_capture(path, c))
+    assert result.passed
+    # The early noise crossing at -9.5 ms must not become the start of the rise.
+    assert result.findings[0].measured == pytest.approx(0.00747619, rel=1e-5)
