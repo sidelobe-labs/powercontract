@@ -168,3 +168,15 @@ def test_capture_rejects_non_finite_samples(tmp_path):
     path = write_capture(tmp_path, "0,0,0\n0.001,nan,0\n")
     with pytest.raises(CaptureError, match="non-finite"):
         load_capture(path, c)
+
+
+def test_missing_event_is_indeterminate_not_failure(tmp_path):
+    c = contract()
+    path = write_capture(
+        tmp_path,
+        "0,0,0\n0.001,1.0,0\n0.002,2.0,0\n0.003,3.3,0\n0.004,3.3,0\n0.005,3.3,0\n",
+    )
+    result = evaluate(c, load_capture(path, c))
+    finding = result.findings[0]
+    assert finding.status == "INDETERMINATE"
+    assert "reset_release" in finding.summary
