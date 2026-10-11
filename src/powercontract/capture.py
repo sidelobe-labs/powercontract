@@ -84,7 +84,10 @@ def _load_table_csv(lines: list[str], contract: Contract) -> Capture:
 
 
 def _row(line: str) -> list[str]:
-    return [field.strip().strip('"') for field in next(csv.reader([line]))]
+    fields = [field.strip().strip('"') for field in next(csv.reader([line]))]
+    while fields and not fields[-1]:
+        fields.pop()
+    return fields
 
 
 def _looks_like_rigol_sequence_csv(lines: list[str]) -> bool:
