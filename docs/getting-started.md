@@ -1,10 +1,8 @@
 # Getting started
 
-This guide assumes you already have a waveform export from an oscilloscope.
+This guide assumes you have cloned the repository. You can first run the bundled example, then replace it with your own capture.
 
 ## 1. Install PowerContract
-
-From a checkout:
 
 ```bash
 python -m pip install .
@@ -18,9 +16,19 @@ python -m pip install -e '.[dev]'
 pytest
 ```
 
-## 2. Look at the CSV before writing a contract
+## 2. Run the bundled example
 
-Do not guess the column names. Open the first few lines:
+```bash
+powercontract check examples/boot.csv examples/boot.yaml
+```
+
+If this works, the installation and CLI are fine. The next step is to use your own capture.
+
+## 3. Inspect your CSV
+
+Do not guess the column names.
+
+On Linux or macOS:
 
 ```bash
 head -n 20 capture.csv
@@ -32,9 +40,7 @@ On Windows PowerShell:
 Get-Content .\capture.csv -TotalCount 20
 ```
 
-You are looking for the time column and the names of the measured signals.
-
-A plain export might look like this:
+A normal table export might look like:
 
 ```text
 Time,VDD_3V3,EN
@@ -44,9 +50,9 @@ Time,VDD_3V3,EN
 0.001,3.30,3.29
 ```
 
-Vendor-specific layouts are covered in [Input formats](input-formats.md) and the [Vendor guide](vendors.md).
+If the file has vendor-specific headers or more than one header row, see [Input formats](input-formats.md).
 
-## 3. Write a contract
+## 4. Write a contract
 
 Create `power.yaml`:
 
@@ -91,15 +97,17 @@ requirements:
     uncertainty: 0.03
 ```
 
-The names under `signals` and `events` are yours. The `column` fields refer to names in the capture file.
+The names under `signals` and `events` are local names used by the contract. Each signal's `column` must match the capture format.
 
-## 4. Run the check
+## 5. Run the check
 
 ```bash
 powercontract check capture.csv power.yaml
 ```
 
-A result looks like this:
+The CLI prints one line per requirement and a summary.
+
+A typical result is:
 
 ```text
 PASS          PWR-001          en_release - vdd_valid = 128 us; allowed >= 50 us; margin 78 us
@@ -108,33 +116,33 @@ PASS          PWR-002          max(vdd) = 3.41 V ± 0.03 V; limit <= 3.6 V; marg
 2/2 requirements passed; 0 failed; 0 indeterminate
 ```
 
-The exact measured values depend on the capture.
+Measured values depend on your capture.
 
-## 5. Keep a machine-readable report
+## 6. Save a JSON report
 
 ```bash
 powercontract check capture.csv power.yaml --json report.json
 ```
 
-The JSON report includes:
+The report includes:
 
-- the PowerContract version;
-- the report schema version;
+- PowerContract version;
+- report schema version;
 - event timestamps;
-- every requirement verdict;
-- measured values and limits;
+- requirement status;
+- measured value and limits;
 - margin;
 - declared uncertainty;
-- requirement source.
+- optional requirement source.
 
-See [Using PowerContract in CI](ci.md) for automation.
+See [CI usage](ci.md) if the report should be stored as a build artifact.
 
 ## Exit codes
 
 | Code | Meaning |
 | ---: | --- |
-| `0` | every requirement passed |
+| `0` | all requirements passed |
 | `1` | at least one requirement failed or was indeterminate |
-| `2` | the input, contract or requested output was invalid |
+| `2` | invalid capture, contract, or output request |
 
-An `INDETERMINATE` result is not an electrical failure. It means the capture does not contain enough evidence to make the requested claim safely.
+`INDETERMINATE` means the requested result cannot be established from the available capture. It is not the same as `FAIL`.
