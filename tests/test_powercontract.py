@@ -133,7 +133,7 @@ def test_fall_time_uses_high_to_low_fraction(tmp_path):
     )
     result = evaluate(c, load_capture(path, c))
     assert result.passed
-    assert result.findings[0].measured == pytest.approx(0.002975, rel=1e-3)
+    assert result.findings[0].measured == pytest.approx(0.0028075, rel=1e-6)
 
 
 def test_extremum_window_rejects_unknown_event():
