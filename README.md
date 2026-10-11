@@ -11,7 +11,7 @@ You map capture columns to named signals, choose threshold events, and define vo
 
 The same contract can be run against later captures with the same signal mapping. Each requirement returns `PASS`, `FAIL`, or `INDETERMINATE`, with its measured value, limit and margin. Missing events and uncertainty intervals that cross a limit remain indeterminate.
 
-PowerContract reads saved data. It doesn't control instruments, estimate uncertainty or interpret datasheets.
+PowerContract is deliberately small. Oscilloscopes and commercial power-analysis suites already provide broad measurement workflows; this tool focuses on checking recorded signals against requirements you can keep in version control and run again. It doesn't control instruments, estimate uncertainty or interpret datasheets.
 
 [Project overview](https://sidelobe.dev/open-source/powercontract/) · [Engineering note: why I wrote it](https://artur.panek.tech/notes/checking-power-up-timing/)
 
