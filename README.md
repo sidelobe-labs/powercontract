@@ -85,6 +85,9 @@ powercontract check capture.csv power.yaml --json report.json
 
 ## Requirements supported in v0.1
 
+Contract version 1 uses seconds for time and volts for signal values.
+
+
 - delay between named threshold events;
 - minimum and maximum voltage;
 - event-bounded voltage windows;
