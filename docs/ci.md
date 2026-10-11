@@ -21,7 +21,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - run: python -m pip install powercontract
+      # Pin the version your project has validated.
+      - run: python -m pip install powercontract==0.1.0
 
       - name: Check power-up capture
         run: |
@@ -37,7 +38,7 @@ jobs:
           path: power-up-report.json
 ```
 
-PowerContract is not yet published to PyPI. Until it is, install a built wheel or pin a repository revision instead of using the example `pip install powercontract` line.
+Pin the PowerContract version used by CI so electrical checks do not change when a new package release is published.
 
 ## Exit codes
 
