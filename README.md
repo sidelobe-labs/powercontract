@@ -122,6 +122,8 @@ See [Input formats](https://github.com/sidelobe-labs/powercontract/blob/main/doc
 - [CI usage](https://github.com/sidelobe-labs/powercontract/blob/main/docs/ci.md)
 - [Troubleshooting](https://github.com/sidelobe-labs/powercontract/blob/main/docs/troubleshooting.md)
 
+[Engineering note: checking power-up timing against a datasheet](https://artur.panek.tech/notes/checking-power-up-timing/) describes the measurement problem and why the checker treats missing evidence separately from a failure.
+
 ## Exit codes
 
 | Code | Meaning |
