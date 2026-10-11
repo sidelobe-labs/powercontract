@@ -5,11 +5,15 @@
 [![CI](https://github.com/sidelobe-labs/powercontract/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sidelobe-labs/powercontract/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/sidelobe-labs/powercontract.svg)](https://github.com/sidelobe-labs/powercontract/blob/main/LICENSE)
 
-PowerContract evaluates oscilloscope waveform data against electrical requirements defined in YAML.
+PowerContract checks exported oscilloscope waveforms against voltage and timing requirements written in YAML.
 
-For each requirement it reports `PASS`, `FAIL`, or `INDETERMINATE`, together with the measured value, limit, margin, and optional uncertainty and source.
+A scope shows what happened. The contract records what you want to check: voltage limits, threshold crossings, delays, and rise or fall times. You can run the same checks on the next capture without setting the cursors again or editing a script for that board.
 
-It does not control the oscilloscope or replace the vendor's waveform-analysis software. Acquisition and evaluation are separate.
+Each requirement returns `PASS`, `FAIL`, or `INDETERMINATE`, with the measured value, limit, and margin. You can also supply measurement uncertainty and a reference to the original requirement. If the capture doesn't contain enough evidence, PowerContract says so instead of guessing.
+
+It reads saved waveforms. It doesn't control the scope, estimate measurement uncertainty, or read datasheets for you.
+
+[Project overview](https://sidelobe.dev/open-source/powercontract/) · [Engineering note: why I wrote it](https://artur.panek.tech/notes/checking-power-up-timing/)
 
 ## Install
 
@@ -121,8 +125,6 @@ See [Input formats](https://github.com/sidelobe-labs/powercontract/blob/main/doc
 - [Oscilloscope vendor notes](https://github.com/sidelobe-labs/powercontract/blob/main/docs/vendors.md)
 - [CI usage](https://github.com/sidelobe-labs/powercontract/blob/main/docs/ci.md)
 - [Troubleshooting](https://github.com/sidelobe-labs/powercontract/blob/main/docs/troubleshooting.md)
-
-[Engineering note: checking power-up timing against a datasheet](https://artur.panek.tech/notes/checking-power-up-timing/) describes the measurement problem and why the checker treats missing evidence separately from a failure.
 
 ## Exit codes
 

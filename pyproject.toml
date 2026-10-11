@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "powercontract"
 dynamic = ["version"]
-description = "Validate oscilloscope captures against executable electrical requirements."
+description = "Check oscilloscope CSV captures against voltage and timing requirements written in YAML."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
