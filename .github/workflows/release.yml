@@ -1,6 +1,7 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v[0-9]*"
@@ -9,32 +10,74 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - run: python -m pip install build twine
+      - name: Run release checks
+        run: |
+          python -m pip install -e '.[dev]'
+          pytest
+          powercontract check examples/boot.csv examples/boot.yaml
+          powercontract check \
+            examples/esp32-c3/usr_wf_C2_data.csv \
+            examples/esp32-c3/contract.yaml \
+            --with examples/esp32-c3/usr_wf_C3_data.csv
+
       - run: python -m build
       - run: python -m twine check dist/*
 
-      - name: Verify tag matches package version
+      - name: Resolve version and tag
+        id: release
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
+          set -euo pipefail
+
           python -m venv /tmp/powercontract-release
           /tmp/powercontract-release/bin/pip install dist/*.whl
+
           VERSION="$(
             cd /tmp &&
             /tmp/powercontract-release/bin/powercontract --version |
             awk '{print $2}'
           )"
-          test "$GITHUB_REF_NAME" = "v$VERSION" || {
-            echo "tag $GITHUB_REF_NAME does not match package version v$VERSION" >&2
-            exit 1
-          }
+          TAG="v$VERSION"
+
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+              echo "manual releases must be started from $DEFAULT_BRANCH" >&2
+              exit 1
+            fi
+
+            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+              echo "tag $TAG already exists" >&2
+              exit 1
+            fi
+
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "PowerContract $TAG"
+            git push origin "$TAG"
+          else
+            if [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+              echo "tag $GITHUB_REF_NAME does not match package version $TAG" >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -48,6 +91,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      RELEASE_TAG: ${{ needs.build.outputs.tag }}
 
     steps:
       - uses: actions/download-artifact@v4
@@ -64,12 +109,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          gh release create "$GITHUB_REF_NAME"
+          gh release create "$RELEASE_TAG"
           dist/*
           --repo "$GITHUB_REPOSITORY"
           --verify-tag
           --generate-notes
-          --title "$GITHUB_REF_NAME"
+          --title "$RELEASE_TAG"
 
   pypi:
     needs:
