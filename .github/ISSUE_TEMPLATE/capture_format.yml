@@ -1,0 +1,72 @@
+name: New capture format
+description: Request support for an oscilloscope or waveform CSV layout.
+title: "[capture] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please sanitize serial numbers, hostnames, paths, and waveform values if they are sensitive.
+
+  - type: input
+    id: vendor
+    attributes:
+      label: Vendor
+      placeholder: "Rigol"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      placeholder: "MSO5000"
+    validations:
+      required: true
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version
+      description: Leave blank if unknown.
+
+  - type: input
+    id: export
+    attributes:
+      label: Export mode
+      description: The menu option, file type, or acquisition method used.
+      placeholder: "Waveform -> Save -> CSV"
+    validations:
+      required: true
+
+  - type: textarea
+    id: sample
+    attributes:
+      label: File sample
+      description: Paste the first 20 sanitized lines of the export.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: mapping
+    attributes:
+      label: Expected mapping
+      description: Which field is time, and which fields represent signals?
+      placeholder: |
+        Time: column X
+        CH1: VDD_3V3
+        CH2: EN
+    validations:
+      required: true
+
+  - type: dropdown
+    id: hardware
+    attributes:
+      label: Do you have access to the physical instrument for testing?
+      options:
+        - "Yes"
+        - "No"
+    validations:
+      required: true
