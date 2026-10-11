@@ -1,5 +1,7 @@
 # PowerContract documentation
 
+Install the current release with `python -m pip install powercontract`.
+
 Start with [Getting started](getting-started.md) if you have a scope export and want to run your first check.
 
 ## User guides
