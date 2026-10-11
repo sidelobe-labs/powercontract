@@ -1,18 +1,16 @@
 # Input formats
 
-PowerContract works with CSV because CSV is the common interchange format across oscilloscopes, scripts and lab tooling.
+PowerContract reads CSV. It chooses a parser from the structure of the file, not from the filename or oscilloscope brand.
 
-It does not identify a scope from its logo or filename. It identifies the structure of the data.
+## Compatibility labels
 
-## Support levels
+The vendor notes use three descriptions:
 
-We use three labels in the vendor guide:
+**Tested with hardware** means the project has been run against a real export from that instrument family.
 
-**Hardware-verified** means PowerContract has been exercised against a real export from that instrument family.
+**Parser tested** means automated tests cover the documented or publicly observed file layout, but the project has not tested that path on the physical instrument.
 
-**Format-verified** means the parser is covered by fixtures that match a documented or publicly observed export shape, but we have not tested that path on the physical instrument ourselves.
-
-**Generic CSV** means the vendor output fits PowerContract's normal table loader. There is no vendor-specific parser.
+**Normal table CSV** means no vendor-specific parser is needed.
 
 ## 1. Normal table CSV
 
@@ -25,11 +23,11 @@ Time,VDD,EN
 0.001,3.3,3.3
 ```
 
-The header may appear after a metadata preamble. PowerContract scans the first 100 lines.
+The header may appear after a metadata preamble. PowerContract searches the first 100 lines for the configured columns.
 
-Comma, semicolon and tab delimiters are accepted.
+Comma, semicolon, and tab delimiters are accepted.
 
-Your contract names the columns explicitly:
+Example mapping:
 
 ```yaml
 capture:
@@ -42,24 +40,18 @@ signals:
     column: EN
 ```
 
-This is the easiest format to create from Python, MATLAB, LabVIEW or custom acquisition code.
+Use this format when you control the export or convert data in Python, MATLAB, LabVIEW, or another script.
 
 ## 2. Siglent SDS800X HD per-channel CSV
 
-Siglent SDS800X HD exports one file per channel with metadata followed by:
+SDS800X HD exports one CSV per analog channel. Each file contains metadata, including a `Source` field, followed by:
 
 ```text
 Second,Value
 ...
 ```
 
-and a metadata field such as:
-
-```text
-Source,CH2
-```
-
-Pass the files as one group:
+Pass all files from the acquisition explicitly:
 
 ```bash
 powercontract check usr_wf_C1_data.csv power.yaml \
@@ -67,7 +59,7 @@ powercontract check usr_wf_C1_data.csv power.yaml \
   --with usr_wf_C3_data.csv
 ```
 
-The contract maps signals to the embedded source names:
+Map signals to the embedded source names:
 
 ```yaml
 signals:
@@ -79,33 +71,13 @@ signals:
     column: CH3
 ```
 
-PowerContract checks the shared time axis, record length, sample interval, units, relevant horizontal metadata and instrument identity when present.
+PowerContract checks the shared time axis, record length, sample interval, units, horizontal metadata, and instrument identity fields when present.
 
-This path is hardware-verified on an SDS824X HD.
+This path has been tested with a real SDS824X HD export.
 
-## 3. Rigol sequence CSV
+## 3. Source + units CSV
 
-A common Rigol layout stores the sample number and keeps the time origin and sample interval in the second header row:
-
-```text
-X,CH1,CH2,Start,Increment,
-Sequence,Volt,Volt,-1.200000e-05,2.000000e-08
-0,3.28,0.16,
-1,3.44,0.08,
-...
-```
-
-PowerContract derives:
-
-```text
-time = Start + Sequence * Increment
-```
-
-Signal columns keep their names, for example `CH1` and `CH2`.
-
-## 4. Source + units matrix
-
-Some scope families export one shared time axis followed by several channels:
+WaveAce and older Siglent families can produce a shared-time-axis layout such as:
 
 ```text
 Source,CH1,CH2
@@ -115,13 +87,33 @@ Second,Volt,Volt
 ...
 ```
 
-PowerContract uses the first column as time and the names in the first row as signal sources.
+The first column is time. The remaining names in the first row are signal sources.
 
-This shape is documented for Teledyne LeCroy WaveAce-family CSV exports and appears in other scope tooling as well.
+This parser is covered by format fixtures. It has not been tested on physical WaveAce hardware in this project.
 
-## 5. Paired XY columns
+## 4. Rigol sequence CSV
 
-Another common Rigol-style layout gives every channel its own time/value pair:
+A Rigol layout used by several tools and captures stores a sample sequence number and places the time origin and interval in the second row:
+
+```text
+X,CH1,CH2,Start,Increment,
+Sequence,Volt,Volt,-1.200000e-05,2.000000e-08
+0,3.28,0.16,
+1,3.44,0.08,
+...
+```
+
+PowerContract calculates:
+
+```text
+time = Start + Sequence * Increment
+```
+
+Signal names remain `CH1`, `CH2`, and so on.
+
+## 5. Rigol paired XY CSV
+
+Another Rigol layout gives each channel a time/value pair:
 
 ```text
 X(CH1),CH1,X(CH2),CH2
@@ -130,11 +122,17 @@ Second,Volt,Second,Volt
 ...
 ```
 
-PowerContract requires the requested channels to have identical time axes before treating them as one capture.
+PowerContract checks that the requested channels use the same time axis before combining them into one capture.
 
-## 6. Legacy metadata + XY
+## 6. Tektronix five-column CSV
 
-Some Tektronix and Teledyne LeCroy exports place metadata in the first three columns and waveform time/value data in columns four and five:
+Tektronix documents a CSV format in which:
+
+- columns 1–3 contain metadata;
+- column 4 contains sample time;
+- column 5 contains sample value.
+
+Example:
 
 ```text
 Record Length,2500,Points,-0.005,0.012
@@ -143,7 +141,7 @@ Trigger Point,1250,Samples,-0.0049992,0.012
 ...
 ```
 
-This format contains one waveform and may not contain a channel name. PowerContract therefore accepts it only for a single-signal contract, using the neutral column alias `Value`:
+The format contains one waveform and does not provide a stable channel name in the waveform columns. Use a single-signal contract with `column: Value`:
 
 ```yaml
 signals:
@@ -151,12 +149,10 @@ signals:
     column: Value
 ```
 
-For multi-rail sequencing, prefer a multi-channel export or normalize the traces into one table CSV.
+For multi-rail checks, export one multi-channel table or normalize separate traces into one table before evaluation.
 
-## Multi-file groups
+## Multi-file input
 
-In v0.1, automatic multi-file grouping is intentionally limited to Siglent SDS800X HD per-channel exports because those files carry enough metadata to identify and cross-check the channels.
+Automatic multi-file grouping is limited to the Siglent SDS800X HD per-channel format in v0.1.
 
-For other vendors, prefer one multi-channel CSV.
-
-This is deliberate. PowerContract should not silently guess that unrelated files came from the same acquisition.
+For other formats, use one multi-channel CSV or normalize the files first. PowerContract does not infer that unrelated files came from the same acquisition.
