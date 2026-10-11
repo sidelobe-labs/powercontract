@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/sidelobe-labs/powercontract/tree/main/docs
+    about: Check setup, input-format, vendor, CI, and troubleshooting documentation.
+  - name: Security report
+    url: mailto:support@sidelobe.dev
+    about: Report security issues privately instead of opening a public issue.
