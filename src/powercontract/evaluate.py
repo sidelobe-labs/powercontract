@@ -86,22 +86,28 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
         measured = events[end] - events[start]
         minimum = duration_seconds(raw["min"], field=f"{req.id}.min") if "min" in raw else None
         maximum = duration_seconds(raw["max"], field=f"{req.id}.max") if "max" in raw else None
-        failures: list[str] = []
-        margins: list[float] = []
-        if minimum is not None:
-            margins.append(measured - minimum)
-            if measured < minimum:
-                failures.append(f"below minimum {format_seconds(minimum)}")
-        if maximum is not None:
-            margins.append(maximum - measured)
-            if measured > maximum:
-                failures.append(f"above maximum {format_seconds(maximum)}")
-        margin = min(margins) if margins else None
-        status = "FAIL" if failures else "PASS"
+        uncertainty = duration_seconds(raw.get("uncertainty", 0), field=f"{req.id}.uncertainty")
+        status, margin = _classify_interval(measured, uncertainty, minimum, maximum)
         summary = f"{end} - {start} = {format_seconds(measured)}"
-        if failures:
-            summary += f" ({'; '.join(failures)})"
-        return Finding(req.id, status, summary, measured, minimum, maximum, margin, "s")
+        if uncertainty:
+            summary += f" ± {format_seconds(uncertainty)}"
+        bounds: list[str] = []
+        if minimum is not None:
+            bounds.append(f">= {format_seconds(minimum)}")
+        if maximum is not None:
+            bounds.append(f"<= {format_seconds(maximum)}")
+        summary += f"; allowed {' and '.join(bounds)}"
+        return Finding(
+            req.id,
+            status,
+            summary,
+            measured,
+            minimum,
+            maximum,
+            margin,
+            "s",
+            uncertainty if "uncertainty" in raw else None,
+        )
 
     signal = str(raw["signal"])
     values = capture.signals[signal]
@@ -113,13 +119,35 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
         measured_values = _values_in_window(capture.time, values, start, end)
         measured = max(measured_values) if req.type == "max_value" else min(measured_values)
         limit = finite_float(raw["value"], field=f"{req.id}.value")
+        uncertainty = finite_float(raw.get("uncertainty", 0), field=f"{req.id}.uncertainty")
+        uncertainty_text = f" ± {uncertainty:.6g} V" if uncertainty else ""
         if req.type == "max_value":
-            margin = limit - measured
-            summary = f"max({signal}{label}) = {measured:.6g} V; limit <= {limit:.6g} V"
-            return Finding(req.id, "PASS" if margin >= 0 else "FAIL", summary, measured, None, limit, margin, "V")
-        margin = measured - limit
-        summary = f"min({signal}{label}) = {measured:.6g} V; limit >= {limit:.6g} V"
-        return Finding(req.id, "PASS" if margin >= 0 else "FAIL", summary, measured, limit, None, margin, "V")
+            status, margin = _classify_interval(measured, uncertainty, None, limit)
+            summary = f"max({signal}{label}) = {measured:.6g} V{uncertainty_text}; limit <= {limit:.6g} V"
+            return Finding(
+                req.id,
+                status,
+                summary,
+                measured,
+                None,
+                limit,
+                margin,
+                "V",
+                uncertainty if "uncertainty" in raw else None,
+            )
+        status, margin = _classify_interval(measured, uncertainty, limit, None)
+        summary = f"min({signal}{label}) = {measured:.6g} V{uncertainty_text}; limit >= {limit:.6g} V"
+        return Finding(
+            req.id,
+            status,
+            summary,
+            measured,
+            limit,
+            None,
+            margin,
+            "V",
+            uncertainty if "uncertainty" in raw else None,
+        )
 
     if req.type in {"rise_time", "fall_time"}:
         nominal = contract.signals[signal].nominal
@@ -147,18 +175,52 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
             transition = f"{high_fraction:.0%}-{low_fraction:.0%} fall time"
         measured = end_time - start_time
         limit = duration_seconds(raw["max"], field=f"{req.id}.max")
-        margin = limit - measured
+        uncertainty = duration_seconds(raw.get("uncertainty", 0), field=f"{req.id}.uncertainty")
+        status, margin = _classify_interval(measured, uncertainty, None, limit)
+        summary = f"{signal} {transition} = {format_seconds(measured)}"
+        if uncertainty:
+            summary += f" ± {format_seconds(uncertainty)}"
+        summary += f"; limit <= {format_seconds(limit)}"
         return Finding(
             req.id,
-            "PASS" if margin >= 0 else "FAIL",
-            f"{signal} {transition} = {format_seconds(measured)}; limit <= {format_seconds(limit)}",
+            status,
+            summary,
             measured,
             None,
             limit,
             margin,
             "s",
+            uncertainty if "uncertainty" in raw else None,
         )
     raise PowerContractError(f"unsupported requirement type {req.type!r}")
+
+
+def _classify_interval(
+    measured: float,
+    uncertainty: float,
+    minimum: float | None,
+    maximum: float | None,
+) -> tuple[str, float | None]:
+    lower = measured - uncertainty
+    upper = measured + uncertainty
+    margins: list[float] = []
+    if minimum is not None:
+        margins.append(lower - minimum)
+    if maximum is not None:
+        margins.append(maximum - upper)
+    margin = min(margins) if margins else None
+
+    # FAIL only when every value permitted by the uncertainty interval violates
+    # at least one active bound. A boundary-straddling interval is inconclusive.
+    if minimum is not None and upper < minimum:
+        return "FAIL", margin
+    if maximum is not None and lower > maximum:
+        return "FAIL", margin
+    if minimum is not None and lower < minimum:
+        return "INDETERMINATE", margin
+    if maximum is not None and upper > maximum:
+        return "INDETERMINATE", margin
+    return "PASS", margin
 
 
 def _paired_transition_crossings(

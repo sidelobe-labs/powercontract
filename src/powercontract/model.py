@@ -54,6 +54,7 @@ class Finding:
     maximum: float | None = None
     margin: float | None = None
     unit: str | None = None
+    uncertainty: float | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -65,4 +66,5 @@ class Finding:
             "maximum": self.maximum,
             "margin": self.margin,
             "unit": self.unit,
+            "uncertainty": self.uncertainty,
         }

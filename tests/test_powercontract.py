@@ -370,3 +370,166 @@ def test_siglent_csv_rejects_declared_record_length_mismatch(tmp_path):
     )
     with pytest.raises(CaptureError, match="declares 3 samples but file contains 2"):
         load_capture(path, c)
+
+
+def test_voltage_uncertainty_straddling_limit_is_indeterminate(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1"}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-MAX",
+            "type": "max_value",
+            "signal": "vdd",
+            "value": 3.6,
+            "uncertainty": 0.05,
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text("Time,C1\n0,3.58\n0.001,3.58\n", encoding="utf-8")
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.status == "INDETERMINATE"
+    assert finding.margin == pytest.approx(-0.03)
+    assert finding.uncertainty == pytest.approx(0.05)
+
+
+def test_voltage_uncertainty_wholly_outside_limit_is_failure(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1"}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-MAX",
+            "type": "max_value",
+            "signal": "vdd",
+            "value": 3.6,
+            "uncertainty": 0.05,
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text("Time,C1\n0,3.70\n0.001,3.70\n", encoding="utf-8")
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.status == "FAIL"
+    assert finding.margin == pytest.approx(-0.15)
+
+
+def test_delay_uncertainty_straddling_minimum_is_indeterminate(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"a": {"column": "C1"}, "b": {"column": "C2"}},
+        "events": {
+            "a_on": {"signal": "a", "direction": "above", "threshold": 0.5},
+            "b_on": {"signal": "b", "direction": "above", "threshold": 0.5},
+        },
+        "requirements": [{
+            "id": "SEQ",
+            "type": "delay",
+            "from": "a_on",
+            "to": "b_on",
+            "min": "2ms",
+            "uncertainty": "0.2ms",
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text(
+        "Time,C1,C2\n"
+        "0,0,0\n"
+        "0.001,1,0\n"
+        "0.0038,1,1\n"
+        "0.004,1,1\n",
+        encoding="utf-8",
+    )
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.measured == pytest.approx(0.0019)
+    assert finding.status == "INDETERMINATE"
+    assert finding.uncertainty == pytest.approx(0.0002)
+
+
+def test_uncertainty_clear_of_limit_can_pass(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1"}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-MAX",
+            "type": "max_value",
+            "signal": "vdd",
+            "value": 3.6,
+            "uncertainty": 0.05,
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text("Time,C1\n0,3.50\n0.001,3.50\n", encoding="utf-8")
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.status == "PASS"
+    assert finding.margin == pytest.approx(0.05)
+
+
+def test_contract_rejects_negative_voltage_uncertainty():
+    with pytest.raises(SpecError, match="uncertainty must be >= 0"):
+        parse_contract({
+            "version": 1,
+            "capture": {},
+            "signals": {"vdd": {"column": "C1"}},
+            "events": {},
+            "requirements": [{
+                "id": "VDD-MAX",
+                "type": "max_value",
+                "signal": "vdd",
+                "value": 3.6,
+                "uncertainty": -0.01,
+            }],
+        })
+
+
+def test_min_value_accepts_uncertainty(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1"}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-MIN",
+            "type": "min_value",
+            "signal": "vdd",
+            "value": 3.0,
+            "uncertainty": 0.05,
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text("Time,C1\n0,3.10\n0.001,3.10\n", encoding="utf-8")
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.status == "PASS"
+    assert finding.margin == pytest.approx(0.05)
+
+
+def test_fall_time_accepts_duration_uncertainty(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1", "nominal": 3.3}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-FALL",
+            "type": "fall_time",
+            "signal": "vdd",
+            "max": "4ms",
+            "uncertainty": "0.5ms",
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text(
+        "Time,C1\n"
+        "0,3.3\n"
+        "0.001,3.0\n"
+        "0.002,2.0\n"
+        "0.003,1.0\n"
+        "0.004,0.2\n",
+        encoding="utf-8",
+    )
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.uncertainty == pytest.approx(0.0005)
