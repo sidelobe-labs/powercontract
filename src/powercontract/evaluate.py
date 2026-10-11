@@ -126,20 +126,25 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
         assert nominal is not None
         low_fraction = finite_float(raw.get("low", 0.1), field=f"{req.id}.low")
         high_fraction = finite_float(raw.get("high", 0.9), field=f"{req.id}.high")
-        if req.type == "rise_time":
-            start_time = _first_up_crossing(capture.time, values, nominal * low_fraction)
-            end_time = _first_up_crossing(capture.time, values, nominal * high_fraction, after=start_time)
-            transition = f"{low_fraction:.0%}-{high_fraction:.0%} rise time"
-        else:
-            start_time = _first_down_crossing(capture.time, values, nominal * high_fraction)
-            end_time = _first_down_crossing(capture.time, values, nominal * low_fraction, after=start_time)
-            transition = f"{high_fraction:.0%}-{low_fraction:.0%} fall time"
-        if start_time is None or end_time is None:
+        direction = "up" if req.type == "rise_time" else "down"
+        crossings = _paired_transition_crossings(
+            capture.time,
+            values,
+            low=nominal * low_fraction,
+            high=nominal * high_fraction,
+            direction=direction,
+        )
+        if crossings is None:
             return Finding(
                 req.id,
                 "INDETERMINATE",
                 f"capture does not contain both thresholds required to measure {signal} {req.type.replace('_', '-')}",
             )
+        start_time, end_time = crossings
+        if req.type == "rise_time":
+            transition = f"{low_fraction:.0%}-{high_fraction:.0%} rise time"
+        else:
+            transition = f"{high_fraction:.0%}-{low_fraction:.0%} fall time"
         measured = end_time - start_time
         limit = duration_seconds(raw["max"], field=f"{req.id}.max")
         margin = limit - measured
@@ -154,6 +159,52 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
             "s",
         )
     raise PowerContractError(f"unsupported requirement type {req.type!r}")
+
+
+def _paired_transition_crossings(
+    times: tuple[float, ...],
+    values: tuple[float, ...],
+    *,
+    low: float,
+    high: float,
+    direction: str,
+) -> tuple[float, float] | None:
+    if direction == "up":
+        end_candidates = _crossings(times, values, high, up=True)
+        if not end_candidates:
+            return None
+        end = end_candidates[0]
+        start_candidates = [t for t in _crossings(times, values, low, up=True) if t <= end]
+    else:
+        end_candidates = _crossings(times, values, low, up=False)
+        if not end_candidates:
+            return None
+        end = end_candidates[0]
+        start_candidates = [t for t in _crossings(times, values, high, up=False) if t <= end]
+
+    if not start_candidates:
+        return None
+    return start_candidates[-1], end
+
+
+def _crossings(
+    times: tuple[float, ...],
+    values: tuple[float, ...],
+    threshold: float,
+    *,
+    up: bool,
+) -> list[float]:
+    result: list[float] = []
+    for i in range(1, len(times)):
+        if up:
+            crossed = values[i - 1] < threshold <= values[i]
+        else:
+            crossed = values[i - 1] > threshold >= values[i]
+        if crossed:
+            result.append(
+                _crossing_time(times[i - 1], values[i - 1], times[i], values[i], threshold)
+            )
+    return result
 
 
 def _missing_event_finding(requirement_id: str, missing: list[str]) -> Finding:
@@ -219,35 +270,3 @@ def _value_at(times: tuple[float, ...], values: tuple[float, ...], time: float) 
     v0, v1 = values[left], values[right]
     fraction = (time - t0) / (t1 - t0)
     return v0 + fraction * (v1 - v0)
-
-
-def _first_up_crossing(
-    times: tuple[float, ...],
-    values: tuple[float, ...],
-    threshold: float,
-    after: float | None = None,
-) -> float | None:
-    for i in range(1, len(times)):
-        if after is not None and times[i] < after:
-            continue
-        if values[i - 1] < threshold <= values[i]:
-            crossing = _crossing_time(times[i - 1], values[i - 1], times[i], values[i], threshold)
-            if after is None or crossing >= after:
-                return crossing
-    return None
-
-
-def _first_down_crossing(
-    times: tuple[float, ...],
-    values: tuple[float, ...],
-    threshold: float,
-    after: float | None = None,
-) -> float | None:
-    for i in range(1, len(times)):
-        if after is not None and times[i] < after:
-            continue
-        if values[i - 1] > threshold >= values[i]:
-            crossing = _crossing_time(times[i - 1], values[i - 1], times[i], values[i], threshold)
-            if after is None or crossing >= after:
-                return crossing
-    return None
