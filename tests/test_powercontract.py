@@ -56,6 +56,8 @@ def test_failing_delay_has_negative_margin(tmp_path):
     finding = result.findings[0]
     assert finding.status == "FAIL"
     assert finding.margin is not None and finding.margin < 0
+    assert finding.minimum == pytest.approx(0.002)
+    assert finding.maximum == pytest.approx(0.008)
 
 
 def test_csv_header_can_follow_scope_metadata_preamble(tmp_path):
@@ -80,4 +82,72 @@ def test_contract_rejects_unknown_event_signal():
             "signals": {"vdd": {"column": "C1"}},
             "events": {"bad": {"signal": "missing", "direction": "above", "threshold": 1}},
             "requirements": [{"id": "A", "type": "max_value", "signal": "vdd", "value": 4}],
+        })
+
+
+def test_max_value_can_be_bounded_by_events(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1"}, "gate": {"column": "C2"}},
+        "events": {
+            "window_start": {"signal": "gate", "direction": "above", "threshold": 1.0},
+            "window_end": {"signal": "gate", "direction": "below", "threshold": 1.0},
+        },
+        "requirements": [{
+            "id": "WINDOW-MAX",
+            "type": "max_value",
+            "signal": "vdd",
+            "value": 3.5,
+            "from": "window_start",
+            "to": "window_end",
+        }],
+    })
+    path = write_capture(
+        tmp_path,
+        "0,4.0,0\n0.001,3.0,0\n0.002,3.3,2\n0.003,3.4,2\n0.004,3.4,0\n",
+    )
+    result = evaluate(c, load_capture(path, c))
+    assert result.passed
+    assert result.findings[0].measured == pytest.approx(3.4)
+
+
+def test_fall_time_uses_high_to_low_fraction(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"vdd": {"column": "C1", "nominal": 3.3}, "unused": {"column": "C2"}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-FALL",
+            "type": "fall_time",
+            "signal": "vdd",
+            "low": 0.1,
+            "high": 0.9,
+            "max": "5ms",
+        }],
+    })
+    path = write_capture(
+        tmp_path,
+        "0,3.3,0\n0.001,3.0,0\n0.002,2.0,0\n0.003,1.0,0\n0.004,0.2,0\n",
+    )
+    result = evaluate(c, load_capture(path, c))
+    assert result.passed
+    assert result.findings[0].measured == pytest.approx(0.002975, rel=1e-3)
+
+
+def test_extremum_window_rejects_unknown_event():
+    with pytest.raises(SpecError, match="unknown event"):
+        parse_contract({
+            "version": 1,
+            "capture": {},
+            "signals": {"vdd": {"column": "C1"}},
+            "events": {},
+            "requirements": [{
+                "id": "WINDOW",
+                "type": "max_value",
+                "signal": "vdd",
+                "value": 3.6,
+                "from": "power_good",
+            }],
         })
