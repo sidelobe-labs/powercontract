@@ -8,7 +8,7 @@ from .errors import SpecError
 from .model import Contract, EventSpec, RequirementSpec, SignalSpec
 from .units import duration_seconds, finite_float
 
-_SUPPORTED_REQUIREMENTS = {"delay", "max_value", "min_value", "rise_time"}
+_SUPPORTED_REQUIREMENTS = {"delay", "max_value", "min_value", "rise_time", "fall_time"}
 
 
 def load_contract(path: str | Path) -> Contract:
@@ -112,16 +112,23 @@ def _validate_requirement(req_id: str, req_type: str, item: dict, signals: dict,
         if item.get("signal") not in signals:
             raise SpecError(f"{req_id}: unknown signal {item.get('signal')!r}")
         finite_float(item.get("value"), field=f"{req_id}.value")
-    elif req_type == "rise_time":
+        _validate_optional_event(req_id, "from", item, events)
+        _validate_optional_event(req_id, "to", item, events)
+    elif req_type in {"rise_time", "fall_time"}:
         signal = item.get("signal")
         if signal not in signals:
             raise SpecError(f"{req_id}: unknown signal {signal!r}")
         if signals[signal].nominal is None:
-            raise SpecError(f"{req_id}: rise_time requires signals.{signal}.nominal")
+            raise SpecError(f"{req_id}: {req_type} requires signals.{signal}.nominal")
         low = finite_float(item.get("low", 0.1), field=f"{req_id}.low")
         high = finite_float(item.get("high", 0.9), field=f"{req_id}.high")
         if not (0 <= low < high <= 1):
             raise SpecError(f"{req_id}: low/high must satisfy 0 <= low < high <= 1")
         if "max" not in item:
-            raise SpecError(f"{req_id}: rise_time requires max")
+            raise SpecError(f"{req_id}: {req_type} requires max")
         duration_seconds(item["max"], field=f"{req_id}.max")
+
+
+def _validate_optional_event(req_id: str, key: str, item: dict, events: dict) -> None:
+    if key in item and item[key] not in events:
+        raise SpecError(f"{req_id}: {key} refers to unknown event {item[key]!r}")
