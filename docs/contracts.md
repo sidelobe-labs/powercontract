@@ -1,6 +1,6 @@
 # Writing contracts
 
-A PowerContract file is YAML with five top-level sections:
+A contract is a YAML file with five top-level fields:
 
 ```yaml
 version: 1
@@ -10,24 +10,24 @@ events: {}
 requirements: []
 ```
 
-Parsing is strict. Unknown fields are errors instead of being silently ignored.
+The parser is strict. Unknown fields are rejected.
 
 ## Capture
 
-For a normal table CSV, `time_column` is the exact name of the time column:
+For a normal table CSV, `time_column` is the exact header used for time:
 
 ```yaml
 capture:
   time_column: Time
 ```
 
-Vendor-specific parsers may derive the time axis from the file itself. Keeping `time_column` in the contract still makes the expected capture convention visible.
-
 Time values are seconds in contract version 1.
+
+Some vendor-specific parsers derive time from the file format instead of this column. The field remains part of the contract so the expected convention is visible.
 
 ## Signals
 
-Signals give stable names to measured columns:
+Signals map names used in the contract to columns or source names in the capture:
 
 ```yaml
 signals:
@@ -39,7 +39,7 @@ signals:
     column: CH2
 ```
 
-`nominal` is required for rise- and fall-time requirements because their thresholds are expressed as fractions of nominal voltage.
+`nominal` is required for rise-time and fall-time checks because their thresholds are fractions of nominal voltage.
 
 Signal values are volts in contract version 1.
 
@@ -56,17 +56,17 @@ events:
     stable_for: 100us
 ```
 
-`direction` is either `above` or `below`.
+`direction` is `above` or `below`.
 
-Crossing times are linearly interpolated between samples.
+Crossing times are linearly interpolated between adjacent samples.
 
-If `stable_for` is present, the signal must remain on the requested side of the threshold for the full interval. If the capture ends before that interval can be observed, the event is not considered proven.
+If `stable_for` is set, the signal must stay on the requested side of the threshold for the full interval. If the capture ends before that interval can be checked, the event is not reported.
 
 ## Requirements
 
-### delay
+### `delay`
 
-Measures the interval between two named events:
+Measures the interval between two events:
 
 ```yaml
 - id: SEQ-001
@@ -79,9 +79,9 @@ Measures the interval between two named events:
 
 Use `min`, `max`, or both.
 
-### max_value
+### `max_value`
 
-Requires the maximum observed voltage to stay at or below a limit:
+Checks that the highest measured voltage does not exceed a limit:
 
 ```yaml
 - id: VDD-MAX
@@ -90,7 +90,7 @@ Requires the maximum observed voltage to stay at or below a limit:
   value: 3.6
 ```
 
-The measurement can be restricted to an event window:
+Use optional event bounds to restrict the measurement interval:
 
 ```yaml
 - id: VDD-MAX-AFTER-START
@@ -101,9 +101,9 @@ The measurement can be restricted to an event window:
   to: reset_release
 ```
 
-### min_value
+### `min_value`
 
-The inverse of `max_value`:
+Checks that the lowest measured voltage stays above a limit:
 
 ```yaml
 - id: VDD-MIN
@@ -112,11 +112,11 @@ The inverse of `max_value`:
   value: 3.0
 ```
 
-It accepts the same optional `from` and `to` bounds.
+It accepts the same optional `from` and `to` event bounds as `max_value`.
 
-### rise_time
+### `rise_time`
 
-Measures a completed upward transition between fractions of nominal voltage:
+Measures a completed upward transition between two fractions of nominal voltage:
 
 ```yaml
 - id: VDD-RISE
@@ -129,9 +129,9 @@ Measures a completed upward transition between fractions of nominal voltage:
 
 The defaults are 10% and 90%.
 
-PowerContract pairs the completed high-threshold crossing with the most recent matching low-threshold crossing. That avoids measuring from an unrelated earlier noise crossing.
+The evaluator first finds a completed high-threshold crossing, then pairs it with the most recent low-threshold crossing before it. This avoids using an unrelated earlier noise crossing as the start of the rise.
 
-### fall_time
+### `fall_time`
 
 Measures a completed downward transition:
 
@@ -148,47 +148,45 @@ The defaults are 90% to 10%.
 
 ## Measurement uncertainty
 
-Uncertainty is explicit. PowerContract does not estimate it from noise or scope settings.
+Uncertainty is supplied by the contract. PowerContract does not estimate it from waveform noise or scope settings.
 
-Voltage requirements use volts:
+For voltage requirements, use volts:
 
 ```yaml
 uncertainty: 0.03
 ```
 
-Timing requirements use a duration:
+For timing requirements, use a duration:
 
 ```yaml
 uncertainty: 10us
 ```
 
-The evaluator treats the measurement as `measured ± uncertainty`:
+The measurement is evaluated as `measured ± uncertainty`:
 
 - the full interval satisfies the requirement: `PASS`;
 - the full interval violates the requirement: `FAIL`;
-- the interval crosses the limit: `INDETERMINATE`.
+- the interval crosses a limit: `INDETERMINATE`.
 
 The reported margin is the worst-case margin after uncertainty is applied.
 
-## Requirement provenance
+## Requirement source
 
-A requirement can retain where it came from:
+Use `source` to record where a limit came from:
 
 ```yaml
 source: "TPS62130A datasheet, section 8.4"
 ```
 
-The source is included in JSON results. PowerContract does not fetch or parse it.
-
-This is useful in reviews: a failing measurement can point back to the exact datasheet table or internal requirement that defined the limit.
+The string is copied into JSON output. PowerContract does not fetch or parse the referenced document.
 
 ## Durations
 
-Durations accept:
+Accepted suffixes:
 
-- seconds: `1s`
-- milliseconds: `2ms`
-- microseconds: `50us` or `50µs`
-- nanoseconds: `100ns`
+- `s`
+- `ms`
+- `us` or `µs`
+- `ns`
 
 A bare numeric duration is interpreted as seconds.
