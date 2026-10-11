@@ -68,9 +68,34 @@ A contract names capture columns, defines events, and applies requirements to th
         high: 0.9
         max: 5ms
 
-PowerContract reports the measured value and margin for every requirement. A requirement can be `PASS`, `FAIL`, or `INDETERMINATE`. `INDETERMINATE` means the capture does not contain enough evidence to evaluate the requirement safely; it is not presented as an electrical failure. Exit code 0 means all requirements passed, 1 means at least one requirement failed or was indeterminate, and 2 means the input or contract was invalid.
+PowerContract reports the measured value and margin for every requirement. A requirement can be `PASS`, `FAIL`, or `INDETERMINATE`. `INDETERMINATE` means the capture does not contain enough evidence to evaluate the requirement safely, including when an explicitly declared measurement uncertainty overlaps a requirement boundary; it is not presented as an electrical failure. Exit code 0 means all requirements passed, 1 means at least one requirement failed or was indeterminate, and 2 means the input or contract was invalid.
 
 Use `--json report.json` for machine-readable output. Contract parsing is strict: unknown fields, invalid numeric values, and inconsistent references are rejected instead of being silently ignored.
+
+## Measurement uncertainty
+
+Every requirement may declare an optional `uncertainty` for the quantity being evaluated. Voltage requirements use volts; timing requirements accept the same duration syntax as their limits.
+
+    - id: VDD-MAX
+      type: max_value
+      signal: vdd_3v3
+      value: 3.60
+      uncertainty: 0.05
+
+    - id: RESET-DELAY
+      type: delay
+      from: vdd_valid
+      to: reset_release
+      min: 50us
+      uncertainty: 10us
+
+PowerContract evaluates the interval `measured ± uncertainty` conservatively:
+
+- the entire interval satisfies the active limit(s): `PASS`
+- the entire interval violates a limit: `FAIL`
+- the interval overlaps a limit boundary: `INDETERMINATE`
+
+The reported margin is the worst-case margin after uncertainty is applied. PowerContract does not infer uncertainty from waveform noise, scope settings, or filtering; the contract must state it explicitly.
 
 ## Requirement types
 
