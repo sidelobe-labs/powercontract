@@ -88,7 +88,7 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
         summary = f"{end} - {start} = {format_seconds(measured)}"
         if failures:
             summary += f" ({'; '.join(failures)})"
-        return Finding(req.id, status, summary, measured, maximum if maximum is not None else minimum, margin, "s")
+        return Finding(req.id, status, summary, measured, minimum, maximum, margin, "s")
 
     signal = str(raw["signal"])
     values = capture.signals[signal]
@@ -96,12 +96,12 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
         measured = max(values)
         limit = finite_float(raw["value"], field=f"{req.id}.value")
         margin = limit - measured
-        return Finding(req.id, "PASS" if margin >= 0 else "FAIL", f"max({signal}) = {measured:.6g} V; limit <= {limit:.6g} V", measured, limit, margin, "V")
+        return Finding(req.id, "PASS" if margin >= 0 else "FAIL", f"max({signal}) = {measured:.6g} V; limit <= {limit:.6g} V", measured, None, limit, margin, "V")
     if req.type == "min_value":
         measured = min(values)
         limit = finite_float(raw["value"], field=f"{req.id}.value")
         margin = measured - limit
-        return Finding(req.id, "PASS" if margin >= 0 else "FAIL", f"min({signal}) = {measured:.6g} V; limit >= {limit:.6g} V", measured, limit, margin, "V")
+        return Finding(req.id, "PASS" if margin >= 0 else "FAIL", f"min({signal}) = {measured:.6g} V; limit >= {limit:.6g} V", measured, limit, None, margin, "V")
     if req.type == "rise_time":
         nominal = contract.signals[signal].nominal
         assert nominal is not None
@@ -114,7 +114,7 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
         measured = high_time - low_time
         limit = duration_seconds(raw["max"], field=f"{req.id}.max")
         margin = limit - measured
-        return Finding(req.id, "PASS" if margin >= 0 else "FAIL", f"{signal} {low_fraction:.0%}-{high_fraction:.0%} rise time = {format_seconds(measured)}; limit <= {format_seconds(limit)}", measured, limit, margin, "s")
+        return Finding(req.id, "PASS" if margin >= 0 else "FAIL", f"{signal} {low_fraction:.0%}-{high_fraction:.0%} rise time = {format_seconds(measured)}; limit <= {format_seconds(limit)}", measured, None, limit, margin, "s")
     raise PowerContractError(f"unsupported requirement type {req.type!r}")
 
 
