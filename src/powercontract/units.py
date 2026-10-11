@@ -27,6 +27,8 @@ def duration_seconds(value: object, *, field: str) -> float:
 
 
 def finite_float(value: object, *, field: str) -> float:
+    if isinstance(value, bool):
+        raise SpecError(f"{field} must be numeric")
     try:
         result = float(value)
     except (TypeError, ValueError) as exc:
