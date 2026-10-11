@@ -1,30 +1,22 @@
 # Getting started
 
-This guide assumes you have cloned the repository. You can first run the bundled example, then replace it with your own capture.
+Install PowerContract from PyPI, then point it at an exported waveform and a contract.
 
 ## 1. Install PowerContract
 
 ```bash
-python -m pip install .
+python -m pip install powercontract
 powercontract --version
 ```
 
-For development:
+If you are working on PowerContract itself, clone the repository and use the development install instead:
 
 ```bash
 python -m pip install -e '.[dev]'
 pytest
 ```
 
-## 2. Run the bundled example
-
-```bash
-powercontract check examples/boot.csv examples/boot.yaml
-```
-
-If this works, the installation and CLI are fine. The next step is to use your own capture.
-
-## 3. Inspect your CSV
+## 2. Inspect your CSV
 
 Do not guess the column names.
 
@@ -52,7 +44,7 @@ Time,VDD_3V3,EN
 
 If the file has vendor-specific headers or more than one header row, see [Input formats](input-formats.md).
 
-## 4. Write a contract
+## 3. Write a contract
 
 Create `power.yaml`:
 
@@ -99,7 +91,7 @@ requirements:
 
 The names under `signals` and `events` are local names used by the contract. Each signal's `column` must match the capture format.
 
-## 5. Run the check
+## 4. Run the check
 
 ```bash
 powercontract check capture.csv power.yaml
@@ -118,7 +110,7 @@ PASS          PWR-002          max(vdd) = 3.41 V ± 0.03 V; limit <= 3.6 V; marg
 
 Measured values depend on your capture.
 
-## 6. Save a JSON report
+## 5. Save a JSON report
 
 ```bash
 powercontract check capture.csv power.yaml --json report.json
