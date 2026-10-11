@@ -52,15 +52,28 @@ def _find_event(capture: Capture, spec: EventSpec) -> float | None:
         crossing = _crossing_time(times[i - 1], values[i - 1], times[i], values[i], spec.threshold)
         if spec.stable_for == 0:
             return crossing
+
         deadline = crossing + spec.stable_for
-        j = i
-        while j < len(times) and times[j] < deadline:
-            if not _condition(values[j], spec):
-                break
-            j += 1
-        else:
-            if times[-1] >= deadline:
-                return crossing
+        if times[-1] < deadline:
+            continue
+        exit_time = _next_condition_exit(times, values, spec, start_index=i)
+        if exit_time is None or exit_time >= deadline:
+            return crossing
+    return None
+
+
+def _next_condition_exit(
+    times: tuple[float, ...],
+    values: tuple[float, ...],
+    spec: EventSpec,
+    *,
+    start_index: int,
+) -> float | None:
+    for i in range(start_index + 1, len(times)):
+        before = _condition(values[i - 1], spec)
+        after = _condition(values[i], spec)
+        if before and not after:
+            return _crossing_time(times[i - 1], values[i - 1], times[i], values[i], spec.threshold)
     return None
 
 
@@ -102,12 +115,10 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
         limit = finite_float(raw["value"], field=f"{req.id}.value")
         if req.type == "max_value":
             margin = limit - measured
-            relation = "<="
-            summary = f"max({signal}{label}) = {measured:.6g} V; limit {relation} {limit:.6g} V"
+            summary = f"max({signal}{label}) = {measured:.6g} V; limit <= {limit:.6g} V"
             return Finding(req.id, "PASS" if margin >= 0 else "FAIL", summary, measured, None, limit, margin, "V")
         margin = measured - limit
-        relation = ">="
-        summary = f"min({signal}{label}) = {measured:.6g} V; limit {relation} {limit:.6g} V"
+        summary = f"min({signal}{label}) = {measured:.6g} V; limit >= {limit:.6g} V"
         return Finding(req.id, "PASS" if margin >= 0 else "FAIL", summary, measured, limit, None, margin, "V")
 
     if req.type in {"rise_time", "fall_time"}:
