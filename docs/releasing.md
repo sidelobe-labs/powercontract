@@ -2,7 +2,9 @@
 
 PowerContract uses GitHub Actions and PyPI Trusted Publishing. No long-lived PyPI API token is stored in GitHub.
 
-## One-time PyPI setup
+## One-time setup
+
+### PyPI
 
 Sign in to PyPI and open:
 
@@ -10,7 +12,7 @@ Sign in to PyPI and open:
 Account settings -> Publishing
 ```
 
-Create a pending GitHub publisher with these values:
+Create a pending GitHub publisher with:
 
 ```text
 PyPI project name: powercontract
@@ -20,84 +22,116 @@ Workflow name:     release.yml
 Environment name:  pypi
 ```
 
-The PyPI project does not need to exist first. A pending publisher creates it on the first successful upload.
+The project does not need to exist first. A pending publisher can create it on the first successful upload.
 
-Important: a pending publisher does not reserve the project name. Do not create it days in advance and assume the name is held.
+A pending publisher does not reserve the project name before that first upload.
 
-The project name must match the package metadata exactly:
+### GitHub
 
-```toml
-name = "powercontract"
-```
-
-## GitHub environment
-
-Create a GitHub Actions environment named:
+Create an Actions environment named:
 
 ```text
 pypi
 ```
 
-The release workflow refers to that exact environment name.
+The environment name must match the PyPI publisher configuration exactly.
 
-If your GitHub plan supports deployment protection rules for the repository, requiring approval for this environment is a useful extra safeguard. It is not required by PowerContract itself.
+If the repository plan supports environment approval rules, requiring approval before the `pypi` job is a useful safeguard.
 
-## Release flow
+## Normal release: one click
 
-The release workflow runs on tags matching:
+Once the PyPI publisher and GitHub environment are configured:
+
+1. Open the repository on GitHub.
+2. Open **Actions**.
+3. Select **Release**.
+4. Choose **Run workflow**.
+5. Run it from the default branch.
+
+The workflow reads the version from the built package. For version `0.1.0`, it creates tag `v0.1.0`.
+
+Before creating the tag it:
+
+1. installs the development dependencies;
+2. runs the test suite;
+3. runs both bundled CLI examples;
+4. builds the wheel and sdist;
+5. runs `twine check`;
+6. installs the built wheel and reads its version;
+7. checks that the tag does not already exist.
+
+If those checks pass, the same workflow:
+
+1. creates and pushes the annotated version tag;
+2. uploads the wheel and sdist as a workflow artifact;
+3. creates the GitHub Release;
+4. adds SHA-256 checksums;
+5. publishes the same wheel and sdist to PyPI through OIDC.
+
+No version number is entered in the Actions form. The package version remains the source of truth.
+
+## Tag-triggered release
+
+The workflow still accepts a manually pushed tag matching:
 
 ```text
 v[0-9]*
 ```
 
-For v0.1.0:
+When started by a tag, it verifies that the tag matches the version read from the built wheel before releasing anything.
 
-```bash
-git switch main
-git pull --ff-only origin main
-git tag -a v0.1.0 -m "PowerContract v0.1.0"
-git push origin v0.1.0
+This is useful for maintainers who prefer the normal Git tag flow, but it is not required for routine releases.
+
+## Why the manual workflow can create a tag safely
+
+The one-click run pushes the tag with the repository's `GITHUB_TOKEN`.
+
+GitHub does not start another workflow run for ordinary push events created with that token, so the generated tag does not recursively start a second Release workflow. The current workflow continues and creates the release itself.
+
+## PyPI authentication
+
+The `pypi` job has:
+
+```yaml
+environment: pypi
+permissions:
+  id-token: write
 ```
 
-The workflow then:
+and uses:
 
-1. builds the sdist and wheel once;
-2. runs `twine check`;
-3. installs the wheel and checks that the package version matches the tag;
-4. stores the built distributions as a workflow artifact;
-5. creates the GitHub Release and attaches the distributions plus `SHA256SUMS`;
-6. publishes the same wheel and sdist to PyPI through OIDC.
-
-The PyPI job has `id-token: write` and uses the official `pypa/gh-action-pypi-publish` action. There is no `PYPI_TOKEN` secret.
-
-## Before pushing the tag
-
-Check:
-
-```bash
-git status
-git log -1 --oneline
+```text
+pypa/gh-action-pypi-publish@release/v1
 ```
 
-Then confirm on GitHub that the latest `main` CI run is green.
+PyPI exchanges the GitHub OIDC identity for a short-lived publishing credential. There is no `PYPI_TOKEN` repository secret.
 
-Also confirm that:
+## Before the first release
 
-- the PyPI pending publisher uses `release.yml`;
-- the PyPI publisher environment is `pypi`;
-- the GitHub environment is also named `pypi`;
-- the version in `src/powercontract/__init__.py` matches the tag.
+Confirm that:
 
-## If the PyPI publish fails
+- the pending PyPI publisher uses project name `powercontract`;
+- owner is `sidelobe-labs`;
+- repository is `powercontract`;
+- workflow filename is `release.yml`;
+- environment is `pypi`;
+- the GitHub Actions environment is also named `pypi`;
+- the latest CI run on the default branch is green.
 
-Do not move or recreate the existing tag until the failure is understood.
+Then use **Actions -> Release -> Run workflow**.
 
-Common Trusted Publishing failures are mismatched values between PyPI and GitHub:
+## If publishing fails
 
-- wrong repository owner;
-- wrong repository name;
-- wrong workflow filename;
-- wrong environment name;
-- project name does not match package metadata.
+Do not delete or move a release tag until the failure is understood.
 
-PyPI's publisher configuration and the GitHub workflow must match exactly.
+For Trusted Publishing, first compare the PyPI publisher values with the workflow:
+
+- owner;
+- repository;
+- workflow filename;
+- environment name;
+- package/project name.
+
+They must match exactly.
+
+If the tag was created but PyPI upload failed, fix the publishing configuration first. Do not reuse the version number for a different build.
