@@ -90,7 +90,7 @@ Requires the minimum observed signal value to be at or above a limit. It accepts
 
 ### rise_time
 
-Measures the first upward transition between two fractions of a signal's declared nominal voltage. The default fractions are 10% and 90%.
+Measures a completed upward transition between two fractions of a signal's declared nominal voltage. The default fractions are 10% and 90%. The high threshold is found first, then the most recent low-threshold crossing before it is used, which avoids pairing a real rise with unrelated earlier threshold noise.
 
 ### fall_time
 
@@ -102,9 +102,34 @@ An event is the first threshold crossing that satisfies its optional stability w
 
 ## CSV input
 
-The configured time and signal columns are explicit. PowerContract scans the first 100 lines for a matching table header, which permits common oscilloscope metadata preambles. Comma, semicolon, and tab delimiters are accepted.
+For ordinary table CSV, the configured time and signal columns are explicit. PowerContract scans the first 100 lines for a matching table header, which permits common oscilloscope metadata preambles. Comma, semicolon, and tab delimiters are accepted.
 
 Time values are seconds. Signal values are volts in 0.1.0.
+
+### Siglent SDS800X HD per-channel CSV
+
+SDS800X HD exports one CSV per analog channel. PowerContract accepts those files as one capture group when they are passed explicitly:
+
+    powercontract check usr_wf_C1_data.csv contract.yaml \
+      --with usr_wf_C2_data.csv \
+      --with usr_wf_C3_data.csv
+
+For this input form, each signal's `column` names the Siglent `Source` metadata value:
+
+    signals:
+      vin:
+        column: CH1
+        nominal: 5.0
+      vdd_3v3:
+        column: CH2
+        nominal: 3.3
+      reset_n:
+        column: CH3
+        nominal: 3.3
+
+The loader requires every requested channel to have the same time axis and matching record/sample metadata. It validates the declared record length and requires seconds/volts units.
+
+The CSV format itself does not contain an acquisition identifier, so compatible per-channel files are treated as one group because the user supplied them together. PowerContract does not claim stronger provenance than the files provide.
 
 ## Project boundary
 
