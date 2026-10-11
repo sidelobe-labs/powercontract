@@ -1,39 +1,30 @@
-# Oscilloscope vendor guide
+# Oscilloscope vendor notes
 
-The safest workflow is always the same:
+Export waveform data rather than a screenshot. Before writing a contract, inspect the first 10–20 lines of the CSV and use the names that are actually present in the file.
 
-1. stop or single-shot the acquisition;
-2. export waveform data, not a screenshot;
-3. keep time in seconds and amplitude in volts;
-4. inspect the first 10–20 lines;
-5. map the actual source names in the contract.
+CSV layouts vary between model families and firmware versions. The table below describes file layouts covered by PowerContract, not every model sold by each vendor.
 
-The notes below describe formats, not every model a vendor has ever shipped.
+## Compatibility
 
-## Compatibility matrix
-
-| Vendor / format | Status | Recommended path |
+| Vendor / format | Project status | Recommended input |
 | --- | --- | --- |
-| Siglent SDS800X HD per-channel CSV | **Hardware-verified** | native grouped CSV |
-| Rigol sequence CSV with `Start` / `Increment` | **Format-verified** | native single-file parser |
-| Rigol paired XY CSV | **Format-verified** | native single-file parser |
-| Teledyne LeCroy WaveAce source+units CSV | **Format-verified** | native single-file parser |
-| Tektronix legacy five-column CSV | **Format-verified** | single trace, `column: Value` |
-| Teledyne LeCroy legacy header+XY CSV | **Format-verified** | single trace, `column: Value` |
-| Keysight InfiniiVision multi-column CSV | **Generic CSV** | map the exported table headers |
-| Python / pandas / MATLAB / LabVIEW CSV | **Generic CSV** | export one time column plus named signal columns |
-
-“Format-verified” means the parser is tested against a fixture that matches vendor documentation or a publicly observed export shape. It is not a claim that every scope in that vendor's catalogue emits exactly the same CSV.
+| Siglent SDS800X HD per-channel CSV | Tested with a real SDS824X HD | grouped per-channel CSV |
+| Older Siglent `Source` + units CSV | Parser tested against public examples | single multi-channel CSV |
+| Teledyne LeCroy WaveAce `Source` / `Second` / `Volt` CSV | Parser tested against the documented layout | single CSV |
+| Rigol sequence CSV with `Start` / `Increment` | Parser tested against public examples | single CSV |
+| Rigol paired XY CSV | Parser tested against public examples | single CSV |
+| Tektronix five-column CSV | Parser tested against the vendor-documented layout | single trace with `column: Value` |
+| Keysight InfiniiVision multi-channel CSV | Normal table CSV when named headers are present | one multi-channel CSV |
 
 ## Siglent
 
 ### SDS800X HD
 
-This is the strongest compatibility path today because it was developed against real SDS824X HD captures.
+This is the only vendor-specific path currently tested with physical hardware in this project.
 
-Save waveform data as CSV. The scope writes one file per displayed analog channel.
+Save waveform data as CSV. The scope writes separate files for displayed analog channels.
 
-Run:
+Example:
 
 ```bash
 powercontract check usr_wf_C1_data.csv contract.yaml \
@@ -41,19 +32,35 @@ powercontract check usr_wf_C1_data.csv contract.yaml \
   --with usr_wf_C3_data.csv
 ```
 
-The parser uses the embedded `Source` field and rejects groups with incompatible time axes or acquisition metadata.
+The parser uses the embedded `Source` value and checks that the supplied files have compatible timing and acquisition metadata.
 
-For deep-memory captures, the scope may ask you to save binary data instead. PowerContract v0.1 does not make the Siglent binary format part of its public input contract; use CSV for reproducible checks.
+For captures too large for CSV, SDS800X HD may ask for binary export. Binary input is not part of PowerContract v0.1.
+
+### Older Siglent CSV
+
+Older Siglent families are publicly documented and observed with a layout such as:
+
+```text
+Source,CH1,CH2
+Second,Volt,Volt
+...
+```
+
+PowerContract accepts this as a single multi-channel CSV through the source+units parser.
+
+## Teledyne LeCroy WaveAce
+
+The WaveAce 1000/2000 manual describes CSV output containing `Source`, `Second`, and `Volt`, with optional fields such as record length, sample interval, units, scale, model, serial number, and software version.
+
+PowerContract accepts the two-row source+units waveform table described above. This parser has not been tested against a physical WaveAce in this project. WaveAce's optional parameter-save mode can add metadata, so inspect the first lines of the exported file before assuming it matches this layout.
 
 ## Rigol
 
-Rigol has used more than one CSV layout across product generations.
+Rigol model families do not all use one CSV layout.
 
-PowerContract supports two useful families directly.
+PowerContract covers two formats seen in public Rigol tooling and captures.
 
 ### Sequence + Start/Increment
-
-Typical shape:
 
 ```text
 X,CH1,CH2,Start,Increment,
@@ -62,11 +69,9 @@ Sequence,Volt,Volt,-5.999998e-02,2.000000e-05
 1,3.44,0.08,
 ```
 
-The first field is a sample sequence number. PowerContract reconstructs the time axis from `Start` and `Increment`.
+PowerContract reconstructs time from `Start`, `Sequence`, and `Increment`.
 
 ### Paired XY
-
-Typical shape:
 
 ```text
 X(CH1),CH1,X(CH2),CH2
@@ -74,17 +79,20 @@ Second,Volt,Second,Volt
 ...
 ```
 
-Each signal has a time/value pair. PowerContract verifies that the requested channels share the same time axis.
+PowerContract requires the requested channels to share the same time axis.
 
-Rigol's manuals document CSV waveform saving across several families, but exact layouts differ by generation. If your file does not resemble either shape, check whether it is already a normal table CSV before opening an issue.
+Rigol manuals confirm CSV waveform export, but the exact layout depends on model and generation. Inspect the file rather than assuming one of these formats.
 
 ## Keysight / Agilent InfiniiVision
 
-InfiniiVision scopes can save multi-channel CSV and separate ASCII XY files.
+Keysight documents two different text export approaches:
 
-For PowerContract, prefer **multi-channel CSV**. It keeps all rails in one file and avoids having to infer whether several separate files came from the same acquisition.
+- CSV: one spreadsheet-style file containing all displayed analog channels;
+- ASCII XY: separate files for individual channels and other waveform sources.
 
-Keysight documents that CSV stores displayed waveforms as multiple columns and uses waveform labels as headers on modern InfiniiVision families. If those headers are present, use the normal table loader:
+For PowerContract, prefer CSV because a single file preserves the multi-channel relationship.
+
+If the CSV contains a header row with time and waveform labels, use the normal table loader:
 
 ```yaml
 capture:
@@ -97,21 +105,23 @@ signals:
     column: EN
 ```
 
-Use the exact labels in your file; do not copy the example blindly.
+Use the exact labels from your file.
 
-Segmented-memory CSV can contain repeated segments. PowerContract v0.1 does not join or reinterpret segments automatically.
+Segmented-memory exports may contain multiple segments. PowerContract v0.1 does not combine or reinterpret them.
 
 ## Tektronix
 
-Tektronix has several CSV generations.
+Tektronix documents a five-column CSV layout:
 
-A long-running legacy format uses:
+- parameter name;
+- parameter value;
+- parameter unit;
+- sample time;
+- sample value.
 
-- metadata in columns 1–3;
-- time in column 4;
-- amplitude in column 5.
+PowerContract reads the time and sample value columns for a single waveform.
 
-PowerContract recognizes this layout for a single waveform:
+Use:
 
 ```yaml
 signals:
@@ -119,31 +129,13 @@ signals:
     column: Value
 ```
 
-This is useful for rise/fall and voltage-limit checks on one trace.
+For multi-rail sequencing, use a multi-channel table export if the instrument provides one, or normalize separate traces into one table before running PowerContract.
 
-For multi-rail sequencing, use a Tektronix export that produces one normal multi-channel table, or normalize the individual traces into one table before evaluation. PowerContract does not guess that several unnamed CSV files came from one acquisition.
+## Other instruments
 
-## Teledyne LeCroy
+If a file already contains one time column and named signal columns, use the normal table CSV loader. No vendor-specific parser is needed.
 
-Two useful layouts are supported.
-
-WaveAce-family exports can use a multi-channel source/unit header:
-
-```text
-Source,CH1,CH2
-Second,Volt,Volt
-...
-```
-
-This works directly for sequencing checks.
-
-Some MAUI/XStream-era ASCII exports use metadata in the first columns with time and amplitude later in the row, similar to the legacy Tektronix shape. Those are accepted as a single trace using `column: Value`.
-
-## Generic exports and scripts
-
-If your scope is not listed, PowerContract does not need to know its brand.
-
-The most portable CSV looks like:
+A portable layout is:
 
 ```text
 Time,VDD_5V,VDD_3V3,EN
@@ -151,24 +143,19 @@ Time,VDD_5V,VDD_3V3,EN
 ...
 ```
 
-That format is easy to produce from:
-
-- pandas;
-- MATLAB;
-- LabVIEW;
-- SCPI acquisition scripts;
-- vendor conversion utilities.
-
-If a vendor-native parser would only duplicate a simple conversion into this shape, keep the conversion outside PowerContract.
+This is also the recommended output from custom SCPI scripts, pandas, MATLAB, or LabVIEW.
 
 ## References
 
-Vendor format notes were checked against the manufacturers' documentation where available:
+The compatibility notes above were checked against these sources:
 
-- Siglent SDS800X HD user documentation: https://www.siglent.com/resource-detail/1297/
-- Rigol support and manuals: https://www.rigolna.com/support/
-- Keysight InfiniiVision user manuals: https://www.keysight.com/
-- Tektronix oscilloscope manuals and support: https://www.tek.com/
-- Teledyne LeCroy oscilloscope manuals: https://www.teledynelecroy.com/support/techlib/productmanuals.aspx?cat=1&type=2
+- Siglent SDS800X HD user manual: https://int.siglent.com/u_file/download/24_02_20/SDS800X_HD_UserManual_EN01A.pdf
+- Rigol DS1000Z-E user guide: https://tw.rigol.com/tw/Images/DS1000ZEUserGuideEN_tcm17-2861.pdf
+- Rigol MSO8000A user guide: https://www.rigol.com/dam/global/downloads/brochures/en/user-manual/oscillosopes/MSO8000A_UserGuide_EN.pdf
+- Keysight InfiniiVision 3000 X-Series programming guide: https://www.keysight.com/us/en/assets/9018-06894/programming-guides/9018-06894.pdf
+- Tektronix DSA/DPO70000 and MSO/DPO5000 printable help, CSV text format: https://download.tek.com/manual/DSA-DPO70000D-MSO-DPO-DSA70000C-DPO7000C-and-MSO-DPO5000-.pdf
+- Teledyne LeCroy WaveAce 1000/2000 operator's manual: https://cdn.teledynelecroy.com/files/manuals/waveace-1000_2000-oscilloscopes-operators-manual.pdf
+- Rigol paired-XY example in pyRigolWFM: https://github.com/mabl/pyRigolWFM
+- Rigol sequence-layout parser example: https://github.com/vidavidorra/rigol-csv-analyser
 
-If a specific model produces a different CSV, open an issue with the model, firmware version, the first 20 lines of a sanitized export, and the expected signal mapping.
+If your model produces a different layout, include the model, firmware version, export mode, and the first 20 sanitized lines when reporting it.

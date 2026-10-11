@@ -1,10 +1,8 @@
-# Using PowerContract in CI
+# CI usage
 
-PowerContract is useful in CI because its result is deterministic and its exit codes are simple.
+PowerContract can run in CI without an oscilloscope attached to the runner. The runner only needs the capture file and contract.
 
-It does not need an oscilloscope connected to the runner. Capture acquisition and capture evaluation are separate concerns.
-
-## Minimal GitHub Actions job
+## GitHub Actions example
 
 ```yaml
 name: electrical-contracts
@@ -15,6 +13,7 @@ on:
 jobs:
   power:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +25,10 @@ jobs:
 
       - name: Check power-up capture
         run: |
-          powercontract check             captures/power-up.csv             contracts/power-up.yaml             --json power-up-report.json
+          powercontract check \
+            captures/power-up.csv \
+            contracts/power-up.yaml \
+            --json power-up-report.json
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -35,19 +37,19 @@ jobs:
           path: power-up-report.json
 ```
 
-Until PowerContract is published to PyPI, install from a pinned repository revision or a built wheel instead of the `pip install powercontract` line above.
+PowerContract is not yet published to PyPI. Until it is, install a built wheel or pin a repository revision instead of using the example `pip install powercontract` line.
 
 ## Exit codes
 
-- `0`: every requirement passed;
-- `1`: at least one requirement failed or is indeterminate;
-- `2`: the contract, capture, or requested output is invalid.
+- `0`: all requirements passed;
+- `1`: at least one requirement failed or was indeterminate;
+- `2`: invalid capture, contract, or output request.
 
-An indeterminate result intentionally fails the CI step. CI should not turn missing evidence into a green build.
+An `INDETERMINATE` result returns exit code 1. A CI job therefore fails when the capture does not contain enough evidence for all requirements.
 
 ## JSON report
 
-A report contains a schema version and evaluator version:
+The report includes both the report schema version and PowerContract version:
 
 ```json
 {
@@ -59,19 +61,19 @@ A report contains a schema version and evaluator version:
 }
 ```
 
-Each finding includes its ID, status, measured value, bounds, margin, uncertainty, unit and source where applicable.
+Each finding can include the requirement ID, status, measured value, limits, margin, unit, uncertainty, and source.
 
-Keep the report as a build artifact if electrical evidence is part of a release or hardware-validation record.
+Store the report as a build artifact if you need to keep electrical-check results with a hardware or firmware revision.
 
-## Acquisition is separate
+## Acquisition
 
-PowerContract does not decide how the capture reaches CI.
+PowerContract does not acquire the waveform.
 
-Common patterns are:
+Typical setups are:
 
-- an engineer exports a scope capture and commits it with the board revision;
-- a lab runner acquires data and uploads it as an artifact;
+- an engineer exports a capture and stores it with the test data;
+- a lab runner acquires the waveform and passes it to the evaluation job;
 - a separate SCPI script controls the instrument;
-- a manufacturing or HIL system writes a normal CSV.
+- a HIL or manufacturing system writes a normal CSV.
 
-Keeping acquisition separate avoids coupling the requirement engine to one scope vendor or lab topology.
+Keeping acquisition separate allows the same contract evaluator to be used with different instruments.
