@@ -37,7 +37,7 @@ jobs:
           path: power-up-report.json
 ```
 
-PowerContract is not yet published to PyPI. Until it is, replace the install command with a pinned repository revision or a built wheel.
+PowerContract is not yet published to PyPI. Until it is, install a built wheel or pin a repository revision instead of using the example `pip install powercontract` line.
 
 ## Exit codes
 
