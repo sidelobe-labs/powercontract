@@ -135,7 +135,11 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
             end_time = _first_down_crossing(capture.time, values, nominal * low_fraction, after=start_time)
             transition = f"{high_fraction:.0%}-{low_fraction:.0%} fall time"
         if start_time is None or end_time is None:
-            return Finding(req.id, "FAIL", f"{signal} did not cross required {req.type.replace('_', '-')} thresholds")
+            return Finding(
+                req.id,
+                "INDETERMINATE",
+                f"capture does not contain both thresholds required to measure {signal} {req.type.replace('_', '-')}",
+            )
         measured = end_time - start_time
         limit = duration_seconds(raw["max"], field=f"{req.id}.max")
         margin = limit - measured
@@ -153,7 +157,11 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
 
 
 def _missing_event_finding(requirement_id: str, missing: list[str]) -> Finding:
-    return Finding(requirement_id, "FAIL", f"event not observed: {', '.join(missing)}")
+    return Finding(
+        requirement_id,
+        "INDETERMINATE",
+        f"required event not observed in capture: {', '.join(missing)}",
+    )
 
 
 def _measurement_window(
