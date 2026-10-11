@@ -10,6 +10,18 @@ from .units import duration_seconds, finite_float
 
 _SUPPORTED_REQUIREMENTS = {"delay", "max_value", "min_value", "rise_time", "fall_time"}
 
+_ROOT_KEYS = {"version", "capture", "signals", "events", "requirements"}
+_CAPTURE_KEYS = {"time_column"}
+_SIGNAL_KEYS = {"column", "nominal"}
+_EVENT_KEYS = {"signal", "direction", "threshold", "stable_for"}
+_REQUIREMENT_KEYS = {
+    "delay": {"id", "type", "from", "to", "min", "max"},
+    "max_value": {"id", "type", "signal", "value", "from", "to"},
+    "min_value": {"id", "type", "signal", "value", "from", "to"},
+    "rise_time": {"id", "type", "signal", "low", "high", "max"},
+    "fall_time": {"id", "type", "signal", "low", "high", "max"},
+}
+
 
 def load_contract(path: str | Path) -> Contract:
     try:
@@ -24,10 +36,12 @@ def load_contract(path: str | Path) -> Contract:
 def parse_contract(data: object) -> Contract:
     if not isinstance(data, dict):
         raise SpecError("contract root must be a mapping")
+    _reject_unknown_keys(data, _ROOT_KEYS, "contract")
     if data.get("version") != 1:
         raise SpecError("contract version must be 1")
 
     capture = _mapping(data.get("capture"), "capture")
+    _reject_unknown_keys(capture, _CAPTURE_KEYS, "capture")
     time_column = capture.get("time_column", "Time")
     if not isinstance(time_column, str) or not time_column:
         raise SpecError("capture.time_column must be a non-empty string")
@@ -40,21 +54,22 @@ def parse_contract(data: object) -> Contract:
         if not isinstance(name, str) or not name:
             raise SpecError("signal names must be non-empty strings")
         item = _mapping(raw, f"signals.{name}")
+        _reject_unknown_keys(item, _SIGNAL_KEYS, f"signals.{name}")
         column = item.get("column")
         if not isinstance(column, str) or not column:
             raise SpecError(f"signals.{name}.column must be a non-empty string")
-        nominal = item.get("nominal")
-        signals[name] = SignalSpec(
-            name=name,
-            column=column,
-            nominal=None if nominal is None else finite_float(nominal, field=f"signals.{name}.nominal"),
-        )
+        nominal_raw = item.get("nominal")
+        nominal = None if nominal_raw is None else finite_float(nominal_raw, field=f"signals.{name}.nominal")
+        if nominal is not None and nominal <= 0:
+            raise SpecError(f"signals.{name}.nominal must be > 0")
+        signals[name] = SignalSpec(name=name, column=column, nominal=nominal)
 
     events: dict[str, EventSpec] = {}
     for name, raw in _mapping(data.get("events", {}), "events").items():
         if not isinstance(name, str) or not name:
             raise SpecError("event names must be non-empty strings")
         item = _mapping(raw, f"events.{name}")
+        _reject_unknown_keys(item, _EVENT_KEYS, f"events.{name}")
         signal = item.get("signal")
         if signal not in signals:
             raise SpecError(f"events.{name}.signal refers to unknown signal {signal!r}")
@@ -85,8 +100,10 @@ def parse_contract(data: object) -> Contract:
         seen.add(req_id)
         if req_type not in _SUPPORTED_REQUIREMENTS:
             raise SpecError(f"requirement {req_id!r} has unsupported type {req_type!r}")
-        _validate_requirement(req_id, str(req_type), item, signals, events)
-        requirements.append(RequirementSpec(req_id, str(req_type), dict(item)))
+        req_type = str(req_type)
+        _reject_unknown_keys(item, _REQUIREMENT_KEYS[req_type], f"requirement {req_id!r}")
+        _validate_requirement(req_id, req_type, item, signals, events)
+        requirements.append(RequirementSpec(req_id, req_type, dict(item)))
 
     return Contract(time_column, signals, events, tuple(requirements))
 
@@ -95,6 +112,12 @@ def _mapping(value: object, field: str) -> dict:
     if not isinstance(value, dict):
         raise SpecError(f"{field} must be a mapping")
     return value
+
+
+def _reject_unknown_keys(item: dict, allowed: set[str], field: str) -> None:
+    unknown = sorted(str(key) for key in item.keys() if key not in allowed)
+    if unknown:
+        raise SpecError(f"{field} has unknown field(s): {', '.join(unknown)}")
 
 
 def _validate_requirement(req_id: str, req_type: str, item: dict, signals: dict, events: dict) -> None:
