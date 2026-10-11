@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from math import isfinite
 from pathlib import Path
 
 from .errors import CaptureError
@@ -20,6 +21,9 @@ def load_capture(path: str | Path, contract: Contract) -> Capture:
     reader = csv.DictReader(lines[header_index:], delimiter=delimiter)
     if reader.fieldnames is None:
         raise CaptureError("capture has no header")
+    reader.fieldnames = [field.strip().strip('"') for field in reader.fieldnames]
+    if len(set(reader.fieldnames)) != len(reader.fieldnames):
+        raise CaptureError("capture has duplicate column names")
     missing = expected.difference(reader.fieldnames)
     if missing:
         raise CaptureError(f"capture is missing columns: {', '.join(sorted(missing))}")
@@ -34,6 +38,8 @@ def load_capture(path: str | Path, contract: Contract) -> Capture:
             values = {name: float(row[signal.column]) for name, signal in contract.signals.items()}
         except (TypeError, ValueError) as exc:
             raise CaptureError(f"row {row_number} contains non-numeric waveform data") from exc
+        if not isfinite(t) or any(not isfinite(value) for value in values.values()):
+            raise CaptureError(f"row {row_number} contains non-finite waveform data")
         if times and t <= times[-1]:
             raise CaptureError(f"time must be strictly increasing (row {row_number})")
         times.append(t)
