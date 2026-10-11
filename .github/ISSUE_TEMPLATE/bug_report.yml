@@ -1,0 +1,77 @@
+name: Bug report
+description: Report incorrect behavior in PowerContract.
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove confidential waveform data, serial numbers, and credentials before posting.
+
+  - type: input
+    id: version
+    attributes:
+      label: PowerContract version
+      description: Output of `powercontract --version`.
+      placeholder: "powercontract 0.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installation
+      options:
+        - PyPI
+        - Git checkout
+        - Built wheel
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system and Python version.
+      placeholder: "Ubuntu 24.04, Python 3.12"
+    validations:
+      required: true
+
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: "powercontract check capture.csv contract.yaml"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the error or incorrect result.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: contract
+    attributes:
+      label: Minimal contract
+      description: Paste the smallest contract that reproduces the issue.
+      render: yaml
+
+  - type: textarea
+    id: capture
+    attributes:
+      label: Capture format
+      description: Paste the first 20 sanitized lines or a reduced fixture when possible.
+      render: text
