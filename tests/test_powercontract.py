@@ -702,3 +702,164 @@ def test_json_report_write_error_returns_input_error(tmp_path, capsys):
     report = tmp_path / "missing-directory" / "report.json"
     assert main(["check", str(capture_path), str(contract_path), "--json", str(report)]) == 2
     assert "cannot write JSON report" in capsys.readouterr().err
+
+
+def vendor_contract(time_column="Time"):
+    return parse_contract({
+        "version": 1,
+        "capture": {"time_column": time_column},
+        "signals": {
+            "vdd": {"column": "CH1", "nominal": 3.3},
+            "reset": {"column": "CH2", "nominal": 3.3},
+        },
+        "events": {
+            "vdd_on": {"signal": "vdd", "direction": "above", "threshold": 3.0},
+            "reset_on": {"signal": "reset", "direction": "above", "threshold": 1.5},
+        },
+        "requirements": [{
+            "id": "SEQ",
+            "type": "delay",
+            "from": "vdd_on",
+            "to": "reset_on",
+            "min": "0s",
+        }],
+    })
+
+
+def test_rigol_sequence_csv_derives_time_from_start_and_increment(tmp_path):
+    path = tmp_path / "rigol.csv"
+    path.write_text(
+        "X,CH1,CH2,Start,Increment,\n"
+        "Sequence,Volt,Volt,-1.000000e-03,1.000000e-03\n"
+        "0,0,0,\n"
+        "1,1,0,\n"
+        "2,3.3,0,\n"
+        "3,3.3,3.3,\n",
+        encoding="utf-8",
+    )
+    c = vendor_contract()
+    capture = load_capture(path, c)
+    assert capture.time == pytest.approx((-0.001, 0.0, 0.001, 0.002))
+    assert capture.signals["vdd"][-1] == pytest.approx(3.3)
+    assert evaluate(c, capture).findings[0].status == "PASS"
+
+
+def test_source_units_matrix_csv_loads_multichannel_waveform(tmp_path):
+    path = tmp_path / "waveace.csv"
+    path.write_text(
+        "Source,CH1,CH2\n"
+        "Second,Volt,Volt\n"
+        "-0.001,0,0\n"
+        "0,1,0\n"
+        "0.001,3.3,0\n"
+        "0.002,3.3,3.3\n",
+        encoding="utf-8",
+    )
+    c = vendor_contract("Second")
+    capture = load_capture(path, c)
+    assert capture.time == pytest.approx((-0.001, 0.0, 0.001, 0.002))
+    assert capture.signals["reset"][-1] == pytest.approx(3.3)
+
+
+def test_paired_xy_csv_requires_shared_time_axis(tmp_path):
+    path = tmp_path / "paired.csv"
+    path.write_text(
+        "X(CH1),CH1,X(CH2),CH2,\n"
+        "Second,Volt,Second,Volt,\n"
+        "-0.001,0,-0.001,0,\n"
+        "0,1,0,0,\n"
+        "0.001,3.3,0.001,0,\n"
+        "0.002,3.3,0.002,3.3,\n",
+        encoding="utf-8",
+    )
+    c = vendor_contract()
+    capture = load_capture(path, c)
+    assert capture.time == pytest.approx((-0.001, 0.0, 0.001, 0.002))
+    assert capture.signals["vdd"][-1] == pytest.approx(3.3)
+
+
+def test_paired_xy_csv_rejects_different_channel_time_axes(tmp_path):
+    path = tmp_path / "paired.csv"
+    path.write_text(
+        "X(CH1),CH1,X(CH2),CH2\n"
+        "Second,Volt,Second,Volt\n"
+        "0,0,0,0\n"
+        "0.001,3.3,0.002,3.3\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(CaptureError, match="does not share the same time axis"):
+        load_capture(path, vendor_contract())
+
+
+def test_legacy_metadata_xy_csv_loads_single_trace(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"rail": {"column": "Value", "nominal": 3.3}},
+        "events": {},
+        "requirements": [{
+            "id": "MAX",
+            "type": "max_value",
+            "signal": "rail",
+            "value": 3.6,
+        }],
+    })
+    path = tmp_path / "tek-legacy.csv"
+    path.write_text(
+        "Record Length,4,Points,-0.001,0.0\n"
+        "Sample Interval,0.001,s,0.000,1.0\n"
+        "Trigger Point,2,Samples,0.001,3.2\n"
+        "Trigger Time,0,s,0.002,3.3\n"
+        "Horizontal Offset,-0.001,s,0.003,3.3\n",
+        encoding="utf-8",
+    )
+    capture = load_capture(path, c)
+    assert capture.time == pytest.approx((-0.001, 0.0, 0.001, 0.002, 0.003))
+    assert evaluate(c, capture).findings[0].status == "PASS"
+
+
+def test_legacy_metadata_xy_requires_value_alias_for_single_trace(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"rail": {"column": "CH1"}},
+        "events": {},
+        "requirements": [{"id": "MAX", "type": "max_value", "signal": "rail", "value": 4}],
+    })
+    path = tmp_path / "legacy.csv"
+    path.write_text(
+        "Record Length,3,Points,0,0\n"
+        "Sample Interval,0.001,s,0.001,1\n"
+        "Trigger Point,1,Samples,0.002,2\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(CaptureError, match="map signals.rail.column to Value"):
+        load_capture(path, c)
+
+
+def test_keysight_style_multicolumn_csv_uses_generic_table_loader(tmp_path):
+    path = tmp_path / "keysight.csv"
+    path.write_text(
+        "Points,4\n"
+        "Acquisition,Normal\n"
+        "Time,CH1,CH2\n"
+        "-0.001,0,0\n"
+        "0,1,0\n"
+        "0.001,3.3,0\n"
+        "0.002,3.3,3.3\n",
+        encoding="utf-8",
+    )
+    c = vendor_contract("Time")
+    capture = load_capture(path, c)
+    assert capture.time == pytest.approx((-0.001, 0.0, 0.001, 0.002))
+    assert capture.signals["reset"][-1] == pytest.approx(3.3)
+
+
+def test_non_siglent_multifile_group_is_rejected_with_actionable_error(tmp_path):
+    c = vendor_contract("Second")
+    first = tmp_path / "a.csv"
+    second = tmp_path / "b.csv"
+    first.write_text("Source,CH1,CH2\nSecond,Volt,Volt\n0,0,0\n1,1,1\n", encoding="utf-8")
+    second.write_text("Source,CH1,CH2\nSecond,Volt,Volt\n0,0,0\n1,1,1\n", encoding="utf-8")
+    with pytest.raises(CaptureError, match="single multi-channel CSV"):
+        load_capture(first, c, [second])
