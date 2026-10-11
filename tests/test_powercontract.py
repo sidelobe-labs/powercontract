@@ -180,3 +180,58 @@ def test_missing_event_is_indeterminate_not_failure(tmp_path):
     finding = result.findings[0]
     assert finding.status == "INDETERMINATE"
     assert "reset_release" in finding.summary
+
+
+def test_contract_rejects_unknown_fields_instead_of_ignoring_typos():
+    with pytest.raises(SpecError, match="unknown field"):
+        parse_contract({
+            "version": 1,
+            "capture": {},
+            "signals": {"vdd": {"column": "C1"}},
+            "events": {
+                "valid": {
+                    "signal": "vdd",
+                    "direction": "above",
+                    "threshold": 3.0,
+                    "stabl_for": "2ms",
+                }
+            },
+            "requirements": [{
+                "id": "A",
+                "type": "max_value",
+                "signal": "vdd",
+                "value": 4.0,
+            }],
+        })
+
+
+def test_contract_rejects_non_positive_nominal_voltage():
+    with pytest.raises(SpecError, match="nominal must be > 0"):
+        parse_contract({
+            "version": 1,
+            "capture": {},
+            "signals": {"vdd": {"column": "C1", "nominal": 0}},
+            "events": {},
+            "requirements": [{
+                "id": "A",
+                "type": "max_value",
+                "signal": "vdd",
+                "value": 4.0,
+            }],
+        })
+
+
+def test_contract_rejects_boolean_numeric_values():
+    with pytest.raises(SpecError, match="must be numeric"):
+        parse_contract({
+            "version": 1,
+            "capture": {},
+            "signals": {"vdd": {"column": "C1"}},
+            "events": {},
+            "requirements": [{
+                "id": "A",
+                "type": "max_value",
+                "signal": "vdd",
+                "value": True,
+            }],
+        })
