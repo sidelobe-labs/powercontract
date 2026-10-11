@@ -18,9 +18,18 @@ def build_parser() -> argparse.ArgumentParser:
         description="Validate oscilloscope captures against electrical requirements.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    check = sub.add_parser("check", help="evaluate one capture against one contract")
+    check = sub.add_parser("check", help="evaluate capture data against one contract")
     check.add_argument("capture", type=Path)
     check.add_argument("contract", type=Path)
+    check.add_argument(
+        "--with",
+        dest="additional_captures",
+        action="append",
+        default=[],
+        type=Path,
+        metavar="CAPTURE",
+        help="add another per-channel capture file from the same acquisition",
+    )
     check.add_argument("--json", dest="json_path", type=Path, help="write a machine-readable report")
     return parser
 
@@ -29,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         contract = load_contract(args.contract)
-        capture = load_capture(args.capture, contract)
+        capture = load_capture(args.capture, contract, args.additional_captures)
         result = evaluate(contract, capture)
     except PowerContractError as exc:
         print(f"error: {exc}", file=sys.stderr)
