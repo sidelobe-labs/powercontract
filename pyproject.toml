@@ -1,31 +1,57 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "powercontract"
-version = "0.1.0"
-description = "Validate oscilloscope captures against executable power and timing requirements."
+dynamic = ["version"]
+description = "Validate oscilloscope captures against executable electrical requirements."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Sidelobe" }]
+keywords = [
+  "oscilloscope",
+  "hardware-validation",
+  "power-sequencing",
+  "embedded",
+  "electronics",
+  "requirements-as-code",
+]
 dependencies = ["PyYAML>=6.0,<7"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
   "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+  "Topic :: Software Development :: Testing",
 ]
+
+[project.urls]
+Homepage = "https://github.com/sidelobe-labs/powercontract"
+Repository = "https://github.com/sidelobe-labs/powercontract"
+Issues = "https://github.com/sidelobe-labs/powercontract/issues"
 
 [project.scripts]
 powercontract = "powercontract.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = [
+  "build>=1.2,<2",
+  "pytest>=8,<10",
+  "twine>=6,<7",
+]
+
+[tool.setuptools.dynamic]
+version = { attr = "powercontract.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
