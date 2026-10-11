@@ -8,7 +8,8 @@
 - added PyPI, Python, CI, and license badges to the README;
 - made README documentation links work from both GitHub and PyPI;
 - updated release documentation for the post-0.1.0 workflow;
-- added PyPI, documentation, and changelog project links to package metadata.
+- added PyPI, documentation, and changelog project links to package metadata;
+- clarified the README introduction and package summary.
 
 ## 0.1.0 - 2026-10-11
 
