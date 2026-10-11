@@ -2,47 +2,53 @@
 
 ## “could not find a CSV header containing all configured columns”
 
-PowerContract did not find the exact `time_column` and signal `column` names from the contract.
+PowerContract did not find the configured `time_column` and signal columns.
 
-Inspect the file:
+Inspect the beginning of the file:
 
 ```bash
 head -n 20 capture.csv
 ```
 
-Then copy the real header names into the contract.
+On Windows:
 
-If the file is a vendor format with two header rows, check [Input formats](input-formats.md).
+```powershell
+Get-Content .\capture.csv -TotalCount 20
+```
+
+Use the exact names present in the export.
+
+If the file has two header rows or vendor metadata, see [Input formats](input-formats.md).
 
 ## “capture is missing columns”
 
-The table header was found, but at least one configured signal is not present.
+At least one configured signal is not present in the detected table.
 
-Typical causes:
+Check that:
 
-- the channel was not enabled when the scope exported the file;
-- the scope used a different label;
-- the contract still refers to an old channel assignment.
+- the channel was enabled when the file was exported;
+- the exported label matches the contract;
+- the contract is not using an old channel assignment.
 
 ## “time must be strictly increasing”
 
-The input contains duplicate or reversed timestamps.
+The input contains duplicate or decreasing timestamps.
 
-PowerContract does not sort the data silently because doing so could hide a malformed export or mix segments from different acquisitions.
+PowerContract does not reorder samples automatically.
 
-For segmented-memory captures, export one segment or normalize the segments deliberately before evaluation.
+For segmented-memory captures, export one segment or normalize the segments before evaluation.
 
 ## “multi-file capture groups currently require Siglent”
 
-Only Siglent SDS800X HD per-channel files are grouped automatically in v0.1.
+Automatic multi-file grouping is limited to the Siglent SDS800X HD per-channel format in v0.1.
 
-For other vendors, prefer one multi-channel CSV. This avoids pretending that several unrelated files definitely came from the same acquisition.
+For other vendors, use one multi-channel CSV or normalize separate files into one table.
 
 ## “map signals.<name>.column to Value”
 
-You are using a legacy single-waveform CSV that contains time and amplitude but no channel name.
+The detected file contains one waveform with time and amplitude data but no usable channel name.
 
-Use:
+Use a single-signal contract:
 
 ```yaml
 signals:
@@ -50,41 +56,37 @@ signals:
     column: Value
 ```
 
-That input format is intentionally single-signal.
+## A requirement is `INDETERMINATE`
 
-## A requirement is INDETERMINATE
+Read the finding summary. Common causes are:
 
-Read the summary.
+- a required threshold crossing was not observed;
+- the capture ended before a `stable_for` interval could be checked;
+- rise/fall thresholds were not both present;
+- declared uncertainty overlaps the requirement boundary.
 
-Common reasons are:
+Do not treat `INDETERMINATE` as `PASS`.
 
-- a required threshold crossing never occurred;
-- the capture ended before a `stable_for` interval could be proven;
-- the capture does not contain both thresholds needed for rise/fall time;
-- the declared uncertainty overlaps the requirement boundary.
+## A peak is larger than the value shown on the scope
 
-Do not automatically convert indeterminate results to pass.
+PowerContract evaluates the samples in the exported file and does not apply hidden smoothing.
 
-## A maximum looks noisier than the scope display
+The scope display or built-in measurement may use decimation, bandwidth limits, filtering, or a different data path.
 
-PowerContract evaluates the samples in the file. It does not apply hidden smoothing.
+If bandwidth or filtering is part of the requirement, record those acquisition settings in the test procedure.
 
-A scope display may be decimated, filtered, bandwidth-limited or based on different measurement data than the exported file.
+## The vendor or model is not listed
 
-If a requirement depends on bandwidth or filtering, make that part of the capture procedure and document it with the requirement.
+Try the normal table CSV loader first.
 
-## The vendor is not listed
+If the file has a clear time column and named signal columns, no vendor-specific parser is needed.
 
-Try the normal table CSV path first.
+If the structure is different, report:
 
-If the file has a clear time column and named signal columns, no vendor-specific support is needed.
-
-If it has a different structural format, open an issue with:
-
-- scope vendor and model;
+- vendor and model;
 - firmware version;
-- export mode used;
-- first 20 lines of a sanitized CSV;
-- expected time and signal columns.
+- export mode;
+- first 20 sanitized lines;
+- expected time and signal mapping.
 
-Do not upload a proprietary or sensitive capture if the values themselves are confidential.
+Do not attach confidential capture data if the waveform values are sensitive.
