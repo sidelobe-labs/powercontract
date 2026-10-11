@@ -14,12 +14,13 @@ _ROOT_KEYS = {"version", "capture", "signals", "events", "requirements"}
 _CAPTURE_KEYS = {"time_column"}
 _SIGNAL_KEYS = {"column", "nominal"}
 _EVENT_KEYS = {"signal", "direction", "threshold", "stable_for"}
+_REQUIREMENT_COMMON_KEYS = {"id", "type", "source"}
 _REQUIREMENT_KEYS = {
-    "delay": {"id", "type", "from", "to", "min", "max", "uncertainty"},
-    "max_value": {"id", "type", "signal", "value", "from", "to", "uncertainty"},
-    "min_value": {"id", "type", "signal", "value", "from", "to", "uncertainty"},
-    "rise_time": {"id", "type", "signal", "low", "high", "max", "uncertainty"},
-    "fall_time": {"id", "type", "signal", "low", "high", "max", "uncertainty"},
+    "delay": _REQUIREMENT_COMMON_KEYS | {"from", "to", "min", "max", "uncertainty"},
+    "max_value": _REQUIREMENT_COMMON_KEYS | {"signal", "value", "from", "to", "uncertainty"},
+    "min_value": _REQUIREMENT_COMMON_KEYS | {"signal", "value", "from", "to", "uncertainty"},
+    "rise_time": _REQUIREMENT_COMMON_KEYS | {"signal", "low", "high", "max", "uncertainty"},
+    "fall_time": _REQUIREMENT_COMMON_KEYS | {"signal", "low", "high", "max", "uncertainty"},
 }
 
 
@@ -102,6 +103,10 @@ def parse_contract(data: object) -> Contract:
             raise SpecError(f"requirement {req_id!r} has unsupported type {req_type!r}")
         req_type = str(req_type)
         _reject_unknown_keys(item, _REQUIREMENT_KEYS[req_type], f"requirement {req_id!r}")
+        if "source" in item:
+            source = item["source"]
+            if not isinstance(source, str) or not source.strip():
+                raise SpecError(f"{req_id}.source must be a non-empty string")
         _validate_requirement(req_id, req_type, item, signals, events)
         requirements.append(RequirementSpec(req_id, req_type, dict(item)))
 

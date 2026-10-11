@@ -593,3 +593,46 @@ def test_siglent_group_validates_extra_supplied_sources(tmp_path):
     ch2 = write_siglent_trace(tmp_path, "CH2", "0.0005,0\n0.0015,1")
     with pytest.raises(CaptureError, match="same time axis"):
         load_capture(ch1, c, [ch2])
+
+
+def test_requirement_source_is_preserved_for_indeterminate_result(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Time"},
+        "signals": {"a": {"column": "C1"}, "b": {"column": "C2"}},
+        "events": {
+            "a_on": {"signal": "a", "direction": "above", "threshold": 0.5},
+            "b_on": {"signal": "b", "direction": "above", "threshold": 0.5},
+        },
+        "requirements": [{
+            "id": "SEQ",
+            "type": "delay",
+            "from": "a_on",
+            "to": "b_on",
+            "min": "50us",
+            "source": "Example datasheet, Table 1",
+        }],
+    })
+    path = tmp_path / "capture.csv"
+    path.write_text("Time,C1,C2\n0,0,0\n0.001,1,0\n0.002,1,0\n", encoding="utf-8")
+    finding = evaluate(c, load_capture(path, c)).findings[0]
+    assert finding.status == "INDETERMINATE"
+    assert finding.source == "Example datasheet, Table 1"
+    assert finding.as_dict()["source"] == "Example datasheet, Table 1"
+
+
+def test_contract_rejects_blank_requirement_source():
+    with pytest.raises(SpecError, match="source must be a non-empty string"):
+        parse_contract({
+            "version": 1,
+            "capture": {},
+            "signals": {"vdd": {"column": "C1"}},
+            "events": {},
+            "requirements": [{
+                "id": "VDD-MAX",
+                "type": "max_value",
+                "signal": "vdd",
+                "value": 3.6,
+                "source": "   ",
+            }],
+        })

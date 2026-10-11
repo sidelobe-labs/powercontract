@@ -55,6 +55,7 @@ class Finding:
     margin: float | None = None
     unit: str | None = None
     uncertainty: float | None = None
+    source: str | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -67,4 +68,5 @@ class Finding:
             "margin": self.margin,
             "unit": self.unit,
             "uncertainty": self.uncertainty,
+            "source": self.source,
         }
