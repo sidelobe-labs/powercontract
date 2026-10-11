@@ -1,0 +1,55 @@
+version: 1
+
+capture:
+  time_column: Time
+
+signals:
+  vdd_3v3:
+    column: C1
+    nominal: 3.3
+  vdd_1v8:
+    column: C2
+    nominal: 1.8
+  reset_n:
+    column: C3
+
+events:
+  vdd_3v3_valid:
+    signal: vdd_3v3
+    direction: above
+    threshold: 3.0
+    stable_for: 2ms
+  vdd_1v8_valid:
+    signal: vdd_1v8
+    direction: above
+    threshold: 1.65
+    stable_for: 2ms
+  reset_release:
+    signal: reset_n
+    direction: above
+    threshold: 1.5
+
+requirements:
+  - id: PWR-001
+    type: delay
+    from: vdd_3v3_valid
+    to: vdd_1v8_valid
+    max: 5ms
+
+  - id: PWR-002
+    type: delay
+    from: vdd_1v8_valid
+    to: reset_release
+    min: 3ms
+
+  - id: PWR-003
+    type: max_value
+    signal: vdd_3v3
+    value: 3.55
+
+  - id: PWR-004
+    type: rise_time
+    signal: vdd_3v3
+    low: 0.1
+    high: 0.9
+    max: 5ms
