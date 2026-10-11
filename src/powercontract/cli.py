@@ -42,10 +42,15 @@ def main(argv: list[str] | None = None) -> int:
                 margin = f"; margin {format_seconds(finding.margin)}"
             else:
                 margin = f"; margin {finding.margin:.6g} {finding.unit or ''}".rstrip()
-        print(f"{finding.status:<4}  {finding.requirement_id:<16} {finding.summary}{margin}")
+        print(f"{finding.status:<13} {finding.requirement_id:<16} {finding.summary}{margin}")
 
     passed = sum(f.status == "PASS" for f in result.findings)
-    print(f"\n{passed}/{len(result.findings)} requirements passed")
+    failed = sum(f.status == "FAIL" for f in result.findings)
+    indeterminate = sum(f.status == "INDETERMINATE" for f in result.findings)
+    print(
+        f"\n{passed}/{len(result.findings)} requirements passed"
+        f"; {failed} failed; {indeterminate} indeterminate"
+    )
 
     if args.json_path:
         payload = {
