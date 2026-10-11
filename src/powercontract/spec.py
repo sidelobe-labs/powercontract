@@ -15,10 +15,10 @@ _CAPTURE_KEYS = {"time_column"}
 _SIGNAL_KEYS = {"column", "nominal"}
 _EVENT_KEYS = {"signal", "direction", "threshold", "stable_for"}
 _REQUIREMENT_KEYS = {
-    "delay": {"id", "type", "from", "to", "min", "max"},
-    "max_value": {"id", "type", "signal", "value", "from", "to"},
+    "delay": {"id", "type", "from", "to", "min", "max", "uncertainty"},
+    "max_value": {"id", "type", "signal", "value", "from", "to", "uncertainty"},
     "min_value": {"id", "type", "signal", "value", "from", "to"},
-    "rise_time": {"id", "type", "signal", "low", "high", "max"},
+    "rise_time": {"id", "type", "signal", "low", "high", "max", "uncertainty"},
     "fall_time": {"id", "type", "signal", "low", "high", "max"},
 }
 
@@ -131,10 +131,16 @@ def _validate_requirement(req_id: str, req_type: str, item: dict, signals: dict,
         maximum = duration_seconds(item["max"], field=f"{req_id}.max") if "max" in item else None
         if minimum is not None and maximum is not None and minimum > maximum:
             raise SpecError(f"{req_id}: min must be <= max")
+        if "uncertainty" in item:
+            duration_seconds(item["uncertainty"], field=f"{req_id}.uncertainty")
     elif req_type in {"max_value", "min_value"}:
         if item.get("signal") not in signals:
             raise SpecError(f"{req_id}: unknown signal {item.get('signal')!r}")
         finite_float(item.get("value"), field=f"{req_id}.value")
+        if "uncertainty" in item:
+            uncertainty = finite_float(item["uncertainty"], field=f"{req_id}.uncertainty")
+            if uncertainty < 0:
+                raise SpecError(f"{req_id}.uncertainty must be >= 0")
         _validate_optional_event(req_id, "from", item, events)
         _validate_optional_event(req_id, "to", item, events)
     elif req_type in {"rise_time", "fall_time"}:
@@ -150,6 +156,8 @@ def _validate_requirement(req_id: str, req_type: str, item: dict, signals: dict,
         if "max" not in item:
             raise SpecError(f"{req_id}: {req_type} requires max")
         duration_seconds(item["max"], field=f"{req_id}.max")
+        if "uncertainty" in item:
+            duration_seconds(item["uncertainty"], field=f"{req_id}.uncertainty")
 
 
 def _validate_optional_event(req_id: str, key: str, item: dict, events: dict) -> None:
