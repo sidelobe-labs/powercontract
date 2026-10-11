@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from bisect import bisect_right
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .errors import PowerContractError
 from .model import Capture, Contract, EventSpec, Finding, RequirementSpec
@@ -25,8 +25,21 @@ def evaluate(contract: Contract, capture: Capture) -> Evaluation:
         if event_time is not None:
             events[name] = event_time
 
-    findings = tuple(_evaluate_requirement(req, contract, capture, events) for req in contract.requirements)
+    findings = tuple(
+        _attach_requirement_source(
+            _evaluate_requirement(req, contract, capture, events),
+            req,
+        )
+        for req in contract.requirements
+    )
     return Evaluation(findings, events)
+
+
+def _attach_requirement_source(finding: Finding, req: RequirementSpec) -> Finding:
+    source = req.raw.get("source")
+    if source is None:
+        return finding
+    return replace(finding, source=str(source))
 
 
 def _condition(value: float, spec: EventSpec) -> bool:
