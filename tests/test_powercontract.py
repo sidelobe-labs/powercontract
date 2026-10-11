@@ -342,3 +342,31 @@ def test_rise_time_pairs_low_threshold_with_same_completed_edge(tmp_path):
     assert result.passed
     # The early noise crossing at -9.5 ms must not become the start of the rise.
     assert result.findings[0].measured == pytest.approx(0.00747619, rel=1e-5)
+
+
+def test_siglent_csv_rejects_declared_record_length_mismatch(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Second"},
+        "signals": {"a": {"column": "CH1"}},
+        "events": {},
+        "requirements": [{"id": "A", "type": "max_value", "signal": "a", "value": 6}],
+    })
+    path = tmp_path / "usr_wf_CH1_data.csv"
+    path.write_text(
+        "\n".join([
+            "Record Length,Analog:3",
+            "Sample Interval,1.000000E-03",
+            "Vertical Units,V,",
+            "Horizontal Units,s",
+            "Horizontal Scale,+5.000000E-03",
+            "Source,CH1",
+            "Second,Value",
+            "0,0",
+            "0.001,1",
+            "",
+        ]),
+        encoding="utf-8",
+    )
+    with pytest.raises(CaptureError, match="declares 3 samples but file contains 2"):
+        load_capture(path, c)
