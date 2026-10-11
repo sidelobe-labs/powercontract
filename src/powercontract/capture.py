@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from math import isfinite
+from math import isclose, isfinite
 from pathlib import Path
 
 from .errors import CaptureError
@@ -89,13 +89,25 @@ def _load_siglent_group(paths: list[Path], contract: Contract) -> Capture:
             "Siglent capture group is missing source(s): " + ", ".join(sorted(missing))
         )
 
-    reference_source = next(iter(sorted(expected_sources)))
+    reference_source = next(iter(sorted(traces)))
     reference_meta, reference_times, _ = traces[reference_source]
-    for source in sorted(expected_sources):
+    comparable_metadata = (
+        "Record Length",
+        "Sample Interval",
+        "Horizontal Units",
+        "Horizontal Scale",
+        "Model",
+        "Serial Number",
+        "Software Version",
+    )
+    # Validate every file the user supplied, not only the sources referenced by
+    # the contract. Silently ignoring an incompatible extra file would make a
+    # claimed capture group less trustworthy.
+    for source in sorted(traces):
         metadata, times, _ = traces[source]
         if times != reference_times:
             raise CaptureError(f"Siglent source {source} does not share the same time axis")
-        for key in ("Record Length", "Sample Interval", "Horizontal Units", "Horizontal Scale"):
+        for key in comparable_metadata:
             if metadata.get(key) != reference_meta.get(key):
                 raise CaptureError(
                     f"Siglent source {source} has different {key!r}: "
@@ -126,7 +138,12 @@ def _read_siglent_trace(
     for line in lines[:header_index]:
         fields = next(csv.reader([line]))
         if len(fields) >= 2:
-            metadata[fields[0].strip()] = fields[1].strip()
+            key = fields[0].strip()
+            if not key:
+                continue
+            if key in metadata:
+                raise CaptureError(f"{path}: duplicate Siglent metadata field {key!r}")
+            metadata[key] = fields[1].strip()
 
     required_meta = {
         "Record Length",
@@ -160,14 +177,40 @@ def _read_siglent_trace(
         raise CaptureError(f"{path}: capture needs at least two samples")
 
     record_length = metadata["Record Length"]
-    if record_length.startswith("Analog:"):
-        try:
-            declared = int(record_length.removeprefix("Analog:"))
-        except ValueError as exc:
-            raise CaptureError(f"{path}: invalid Record Length {record_length!r}") from exc
-        if declared != len(times):
+    if not record_length.startswith("Analog:"):
+        raise CaptureError(f"{path}: unsupported Record Length {record_length!r}")
+    try:
+        declared = int(record_length.removeprefix("Analog:"))
+    except ValueError as exc:
+        raise CaptureError(f"{path}: invalid Record Length {record_length!r}") from exc
+    if declared != len(times):
+        raise CaptureError(
+            f"{path}: Record Length declares {declared} samples but file contains {len(times)}"
+        )
+
+    try:
+        declared_interval = float(metadata["Sample Interval"])
+    except ValueError as exc:
+        raise CaptureError(
+            f"{path}: invalid Sample Interval {metadata['Sample Interval']!r}"
+        ) from exc
+    if not isfinite(declared_interval) or declared_interval <= 0:
+        raise CaptureError(
+            f"{path}: Sample Interval must be finite and > 0, got {metadata['Sample Interval']!r}"
+        )
+
+    interval_abs_tol = max(1e-15, declared_interval * 1e-9)
+    for index in range(1, len(times)):
+        observed_interval = times[index] - times[index - 1]
+        if not isclose(
+            observed_interval,
+            declared_interval,
+            rel_tol=1e-6,
+            abs_tol=interval_abs_tol,
+        ):
             raise CaptureError(
-                f"{path}: Record Length declares {declared} samples but file contains {len(times)}"
+                f"{path}: time axis interval at sample {index} is {observed_interval:.9g} s "
+                f"but metadata declares {declared_interval:.9g} s"
             )
 
     return metadata, tuple(times), tuple(values)
