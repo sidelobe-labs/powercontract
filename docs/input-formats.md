@@ -77,7 +77,7 @@ This path has been tested with a real SDS824X HD export.
 
 ## 3. Source + units CSV
 
-WaveAce and older Siglent families can produce a shared-time-axis layout such as:
+WaveAce documentation and public exports from older Siglent families describe a shared-time-axis layout such as:
 
 ```text
 Source,CH1,CH2
@@ -89,7 +89,7 @@ Second,Volt,Volt
 
 The first column is time. The remaining names in the first row are signal sources.
 
-This parser is covered by format fixtures. It has not been tested on physical WaveAce hardware in this project.
+This parser is covered by format fixtures. It has not been tested on physical WaveAce hardware in this project, and vendor options that add extra parameter rows can change the exact file layout.
 
 ## 4. Rigol sequence CSV
 
