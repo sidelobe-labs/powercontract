@@ -1,8 +1,11 @@
+import json
 from pathlib import Path
 
 import pytest
 
+from powercontract import __version__
 from powercontract.capture import load_capture
+from powercontract.cli import main
 from powercontract.errors import CaptureError, SpecError
 from powercontract.evaluate import evaluate
 from powercontract.spec import parse_contract
@@ -636,3 +639,66 @@ def test_contract_rejects_blank_requirement_source():
                 "source": "   ",
             }],
         })
+
+
+def test_cli_version(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["--version"])
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.strip() == f"powercontract {__version__}"
+
+
+def test_json_report_is_versioned(tmp_path):
+    capture_path = tmp_path / "capture.csv"
+    capture_path.write_text(
+        "Time,C1\n"
+        "0,0\n"
+        "0.001,3.3\n",
+        encoding="utf-8",
+    )
+    contract_path = tmp_path / "contract.yaml"
+    contract_path.write_text(
+        "version: 1\n"
+        "capture:\n"
+        "  time_column: Time\n"
+        "signals:\n"
+        "  vdd:\n"
+        "    column: C1\n"
+        "requirements:\n"
+        "  - id: VDD-MAX\n"
+        "    type: max_value\n"
+        "    signal: vdd\n"
+        "    value: 3.6\n",
+        encoding="utf-8",
+    )
+    report = tmp_path / "report.json"
+    assert main(["check", str(capture_path), str(contract_path), "--json", str(report)]) == 0
+
+    payload = json.loads(report.read_text(encoding="utf-8"))
+    assert payload["schema_version"] == 1
+    assert payload["powercontract_version"] == __version__
+    assert payload["passed"] is True
+    assert payload["findings"][0]["id"] == "VDD-MAX"
+
+
+def test_json_report_write_error_returns_input_error(tmp_path, capsys):
+    capture_path = tmp_path / "capture.csv"
+    capture_path.write_text("Time,C1\n0,0\n0.001,3.3\n", encoding="utf-8")
+    contract_path = tmp_path / "contract.yaml"
+    contract_path.write_text(
+        "version: 1\n"
+        "capture:\n"
+        "  time_column: Time\n"
+        "signals:\n"
+        "  vdd:\n"
+        "    column: C1\n"
+        "requirements:\n"
+        "  - id: VDD-MAX\n"
+        "    type: max_value\n"
+        "    signal: vdd\n"
+        "    value: 3.6\n",
+        encoding="utf-8",
+    )
+    report = tmp_path / "missing-directory" / "report.json"
+    assert main(["check", str(capture_path), str(contract_path), "--json", str(report)]) == 2
+    assert "cannot write JSON report" in capsys.readouterr().err

@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from . import __version__
 from .capture import load_capture
 from .errors import PowerContractError
 from .evaluate import evaluate
@@ -16,6 +17,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="powercontract",
         description="Validate oscilloscope captures against electrical requirements.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     check = sub.add_parser("check", help="evaluate capture data against one contract")
@@ -63,11 +69,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json_path:
         payload = {
+            "schema_version": 1,
+            "powercontract_version": __version__,
             "passed": result.passed,
             "events": result.events,
             "findings": [finding.as_dict() for finding in result.findings],
         }
-        args.json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        try:
+            args.json_path.write_text(
+                json.dumps(payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            print(f"error: cannot write JSON report: {exc}", file=sys.stderr)
+            return 2
 
     return 0 if result.passed else 1
 
