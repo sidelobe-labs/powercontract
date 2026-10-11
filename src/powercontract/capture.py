@@ -15,11 +15,25 @@ def load_capture(
 ) -> Capture:
     paths = [Path(path), *(Path(p) for p in (additional_paths or []))]
     if len(paths) > 1:
-        return _load_siglent_group(paths, contract)
+        if all(_looks_like_siglent_csv(_read_lines(path)) for path in paths):
+            return _load_siglent_group(paths, contract)
+        raise CaptureError(
+            "multi-file capture groups currently require Siglent per-channel CSV; "
+            "use a single multi-channel CSV for other formats"
+        )
 
-    lines = _read_lines(paths[0])
+    path = paths[0]
+    lines = _read_lines(path)
     if _looks_like_siglent_csv(lines):
         return _load_siglent_group(paths, contract)
+    if _looks_like_rigol_sequence_csv(lines):
+        return _load_rigol_sequence_csv(lines, contract, path)
+    if _looks_like_paired_xy_csv(lines):
+        return _load_paired_xy_csv(lines, contract, path)
+    if _looks_like_source_units_csv(lines):
+        return _load_source_units_csv(lines, contract, path)
+    if _looks_like_legacy_metadata_xy_csv(lines):
+        return _load_legacy_metadata_xy_csv(lines, contract, path)
     return _load_table_csv(lines, contract)
 
 
@@ -66,6 +80,254 @@ def _load_table_csv(lines: list[str], contract: Contract) -> Capture:
     if len(times) < 2:
         raise CaptureError("capture needs at least two samples")
     return Capture(tuple(times), {name: tuple(values) for name, values in signal_values.items()})
+
+
+
+def _row(line: str) -> list[str]:
+    fields = [field.strip().strip('"') for field in next(csv.reader([line]))]
+    while fields and not fields[-1]:
+        fields.pop()
+    return fields
+
+
+def _looks_like_rigol_sequence_csv(lines: list[str]) -> bool:
+    if len(lines) < 3:
+        return False
+    names = _row(lines[0])
+    units = _row(lines[1])
+    return (
+        len(names) >= 4
+        and len(units) >= len(names) - 1
+        and names[0].lower() == "x"
+        and "Start" in names
+        and "Increment" in names
+        and units[0].lower() == "sequence"
+    )
+
+
+def _load_rigol_sequence_csv(lines: list[str], contract: Contract, path: Path) -> Capture:
+    names = _row(lines[0])
+    units = _row(lines[1])
+    start_index = names.index("Start")
+    increment_index = names.index("Increment")
+    source_names = names[1:start_index]
+    if not source_names:
+        raise CaptureError(f"{path}: Rigol CSV contains no analog sources")
+    if len(set(source_names)) != len(source_names):
+        raise CaptureError(f"{path}: Rigol CSV contains duplicate source names")
+    if any(units[index].lower() not in {"volt", "v"} for index in range(1, start_index)):
+        raise CaptureError(f"{path}: Rigol CSV analog sources must be in volts")
+
+    expected = {signal.column for signal in contract.signals.values()}
+    missing = expected.difference(source_names)
+    if missing:
+        raise CaptureError(f"{path}: Rigol CSV is missing source(s): {', '.join(sorted(missing))}")
+
+    try:
+        start = float(units[start_index])
+        increment = float(units[increment_index])
+    except (IndexError, ValueError) as exc:
+        raise CaptureError(f"{path}: Rigol CSV has invalid Start/Increment metadata") from exc
+    if not isfinite(start) or not isfinite(increment) or increment <= 0:
+        raise CaptureError(f"{path}: Rigol Start/Increment must be finite and increment > 0")
+
+    source_positions = {name: names.index(name) for name in expected}
+    times: list[float] = []
+    signal_values: dict[str, list[float]] = {name: [] for name in contract.signals}
+    for row_number, line in enumerate(lines[2:], start=3):
+        fields = _row(line)
+        if not fields or not any(fields):
+            continue
+        try:
+            sequence = float(fields[0])
+            t = start + sequence * increment
+            values = {
+                name: float(fields[source_positions[signal.column]])
+                for name, signal in contract.signals.items()
+            }
+        except (IndexError, ValueError) as exc:
+            raise CaptureError(f"{path}: row {row_number} contains invalid Rigol waveform data") from exc
+        _validate_sample_row(t, values.values(), row_number, path)
+        if times and t <= times[-1]:
+            raise CaptureError(f"{path}: derived time must be strictly increasing (row {row_number})")
+        times.append(t)
+        for name, value in values.items():
+            signal_values[name].append(value)
+
+    if len(times) < 2:
+        raise CaptureError(f"{path}: capture needs at least two samples")
+    return Capture(tuple(times), {name: tuple(values) for name, values in signal_values.items()})
+
+
+def _looks_like_source_units_csv(lines: list[str]) -> bool:
+    if len(lines) < 3:
+        return False
+    names = _row(lines[0])
+    units = _row(lines[1])
+    if len(names) < 2 or len(units) < len(names):
+        return False
+    return (
+        names[0].lower() in {"source", "x-axis", "x", "time"}
+        and units[0].lower() in {"second", "seconds", "s"}
+        and all(unit.lower() in {"volt", "volts", "v"} for unit in units[1:len(names)])
+    )
+
+
+def _load_source_units_csv(lines: list[str], contract: Contract, path: Path) -> Capture:
+    names = _row(lines[0])
+    source_names = names[1:]
+    if len(set(source_names)) != len(source_names):
+        raise CaptureError(f"{path}: capture contains duplicate source names")
+    expected = {signal.column for signal in contract.signals.values()}
+    missing = expected.difference(source_names)
+    if missing:
+        raise CaptureError(f"{path}: capture is missing source(s): {', '.join(sorted(missing))}")
+
+    positions = {source: source_names.index(source) + 1 for source in expected}
+    times: list[float] = []
+    signal_values: dict[str, list[float]] = {name: [] for name in contract.signals}
+    for row_number, line in enumerate(lines[2:], start=3):
+        fields = _row(line)
+        if not fields or not any(fields):
+            continue
+        try:
+            t = float(fields[0])
+            values = {
+                name: float(fields[positions[signal.column]])
+                for name, signal in contract.signals.items()
+            }
+        except (IndexError, ValueError) as exc:
+            raise CaptureError(f"{path}: row {row_number} contains invalid waveform data") from exc
+        _validate_sample_row(t, values.values(), row_number, path)
+        if times and t <= times[-1]:
+            raise CaptureError(f"{path}: time must be strictly increasing (row {row_number})")
+        times.append(t)
+        for name, value in values.items():
+            signal_values[name].append(value)
+
+    if len(times) < 2:
+        raise CaptureError(f"{path}: capture needs at least two samples")
+    return Capture(tuple(times), {name: tuple(values) for name, values in signal_values.items()})
+
+
+def _looks_like_paired_xy_csv(lines: list[str]) -> bool:
+    if len(lines) < 3:
+        return False
+    names = _row(lines[0])
+    units = _row(lines[1])
+    if len(names) < 2 or len(names) % 2 or len(units) < len(names):
+        return False
+    return all(
+        units[index].lower() in {"second", "seconds", "s"}
+        and units[index + 1].lower() in {"volt", "volts", "v"}
+        for index in range(0, len(names), 2)
+    )
+
+
+def _load_paired_xy_csv(lines: list[str], contract: Contract, path: Path) -> Capture:
+    names = _row(lines[0])
+    source_positions = {names[index + 1]: (index, index + 1) for index in range(0, len(names), 2)}
+    if len(source_positions) != len(names) // 2:
+        raise CaptureError(f"{path}: paired XY CSV contains duplicate source names")
+    expected = {signal.column for signal in contract.signals.values()}
+    missing = expected.difference(source_positions)
+    if missing:
+        raise CaptureError(f"{path}: paired XY CSV is missing source(s): {', '.join(sorted(missing))}")
+
+    source_times: dict[str, list[float]] = {source: [] for source in expected}
+    source_values: dict[str, list[float]] = {source: [] for source in expected}
+    for row_number, line in enumerate(lines[2:], start=3):
+        fields = _row(line)
+        if not fields or not any(fields):
+            continue
+        for source in expected:
+            time_index, value_index = source_positions[source]
+            try:
+                t = float(fields[time_index])
+                value = float(fields[value_index])
+            except (IndexError, ValueError) as exc:
+                raise CaptureError(f"{path}: row {row_number} contains invalid paired XY data") from exc
+            _validate_sample_row(t, (value,), row_number, path)
+            if source_times[source] and t <= source_times[source][-1]:
+                raise CaptureError(f"{path}: {source} time must be strictly increasing (row {row_number})")
+            source_times[source].append(t)
+            source_values[source].append(value)
+
+    reference_source = next(iter(sorted(expected)))
+    reference_times = tuple(source_times[reference_source])
+    if len(reference_times) < 2:
+        raise CaptureError(f"{path}: capture needs at least two samples")
+    for source in expected:
+        if tuple(source_times[source]) != reference_times:
+            raise CaptureError(f"{path}: paired XY source {source} does not share the same time axis")
+
+    signal_values = {
+        name: tuple(source_values[signal.column])
+        for name, signal in contract.signals.items()
+    }
+    return Capture(reference_times, signal_values)
+
+
+_LEGACY_XY_METADATA = {
+    "Record Length",
+    "Sample Interval",
+    "Trigger Point",
+    "Trigger Time",
+    "Horizontal Offset",
+}
+
+
+def _looks_like_legacy_metadata_xy_csv(lines: list[str]) -> bool:
+    hits = 0
+    numeric_xy = 0
+    for line in lines[:20]:
+        fields = _row(line)
+        if fields and fields[0] in _LEGACY_XY_METADATA:
+            hits += 1
+        if len(fields) >= 5:
+            try:
+                float(fields[3])
+                float(fields[4])
+            except ValueError:
+                pass
+            else:
+                numeric_xy += 1
+    return hits >= 2 and numeric_xy >= 2
+
+
+def _load_legacy_metadata_xy_csv(lines: list[str], contract: Contract, path: Path) -> Capture:
+    if len(contract.signals) != 1:
+        raise CaptureError(
+            f"{path}: legacy metadata+XY CSV contains one waveform; "
+            "use a single-signal contract or normalize multiple traces into one table"
+        )
+    signal_name, signal = next(iter(contract.signals.items()))
+    if signal.column.lower() not in {"value", "voltage", "amplitude"}:
+        raise CaptureError(
+            f"{path}: legacy metadata+XY CSV has no embedded channel name; "
+            f"map signals.{signal_name}.column to Value"
+        )
+
+    times: list[float] = []
+    values: list[float] = []
+    for row_number, line in enumerate(lines, start=1):
+        fields = _row(line)
+        if len(fields) < 5:
+            continue
+        try:
+            t = float(fields[3])
+            value = float(fields[4])
+        except ValueError:
+            continue
+        _validate_sample_row(t, (value,), row_number, path)
+        if times and t <= times[-1]:
+            raise CaptureError(f"{path}: time must be strictly increasing (row {row_number})")
+        times.append(t)
+        values.append(value)
+
+    if len(times) < 2:
+        raise CaptureError(f"{path}: capture needs at least two waveform samples")
+    return Capture(tuple(times), {signal_name: tuple(values)})
 
 
 def _looks_like_siglent_csv(lines: list[str]) -> bool:
