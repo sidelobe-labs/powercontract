@@ -50,7 +50,8 @@ class Finding:
     status: Status
     summary: str
     measured: float | None = None
-    limit: float | None = None
+    minimum: float | None = None
+    maximum: float | None = None
     margin: float | None = None
     unit: str | None = None
 
@@ -60,7 +61,8 @@ class Finding:
             "status": self.status,
             "summary": self.summary,
             "measured": self.measured,
-            "limit": self.limit,
+            "minimum": self.minimum,
+            "maximum": self.maximum,
             "margin": self.margin,
             "unit": self.unit,
         }
