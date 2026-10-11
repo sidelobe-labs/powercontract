@@ -8,7 +8,7 @@ CSV layouts vary between model families and firmware versions. The table below d
 
 | Vendor / format | Project status | Recommended input |
 | --- | --- | --- |
-| Siglent SDS800X HD per-channel CSV | Tested with a real SDS824X HD | grouped per-channel CSV |
+| Siglent SDS800X HD per-channel CSV | Tested with hardware from this series | grouped per-channel CSV |
 | Older Siglent `Source` + units CSV | Parser tested against public examples | single multi-channel CSV |
 | Teledyne LeCroy WaveAce `Source` / `Second` / `Volt` CSV | Parser tested against the documented layout | single CSV |
 | Rigol sequence CSV with `Start` / `Increment` | Parser tested against public examples | single CSV |

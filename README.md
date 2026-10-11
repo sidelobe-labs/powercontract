@@ -5,13 +5,13 @@
 [![CI](https://github.com/sidelobe-labs/powercontract/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sidelobe-labs/powercontract/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/sidelobe-labs/powercontract.svg)](https://github.com/sidelobe-labs/powercontract/blob/main/LICENSE)
 
-PowerContract checks exported oscilloscope waveforms against voltage and timing requirements written in YAML.
+PowerContract checks waveform CSV files against electrical requirements defined in YAML.
 
-A scope shows what happened. The contract records what you want to check: voltage limits, threshold crossings, delays, and rise or fall times. You can run the same checks on the next capture without setting the cursors again or editing a script for that board.
+You map capture columns to named signals, choose threshold events, and define voltage or timing limits. Events can require a stable interval; voltage limits can apply to the whole capture or between two events. Rise and fall times, measurement uncertainty and requirement references are also defined in the contract.
 
-Each requirement returns `PASS`, `FAIL`, or `INDETERMINATE`, with the measured value, limit, and margin. You can also supply measurement uncertainty and a reference to the original requirement. If the capture doesn't contain enough evidence, PowerContract says so instead of guessing.
+The same contract can be run against later captures with the same signal mapping. Each requirement returns `PASS`, `FAIL`, or `INDETERMINATE`, with its measured value, limit and margin. Missing events and uncertainty intervals that cross a limit remain indeterminate.
 
-It reads saved waveforms. It doesn't control the scope, estimate measurement uncertainty, or read datasheets for you.
+PowerContract reads saved data. It doesn't control instruments, estimate uncertainty or interpret datasheets.
 
 [Project overview](https://sidelobe.dev/open-source/powercontract/) · [Engineering note: why I wrote it](https://artur.panek.tech/notes/checking-power-up-timing/)
 
@@ -105,7 +105,7 @@ If the capture does not contain enough evidence to evaluate a requirement, the r
 | Input | Support |
 | --- | --- |
 | Normal table CSV with one time column and named signal columns | Supported |
-| Siglent SDS800X HD per-channel CSV | Tested with a real SDS824X HD |
+| Siglent SDS800X HD per-channel CSV | Tested with hardware from this series |
 | Older Siglent / WaveAce-style `Source` + units CSV | Parser tested against documented/public examples |
 | Rigol sequence CSV with `Start` / `Increment` | Parser tested against public format examples |
 | Rigol paired XY CSV | Parser tested against public format examples |
@@ -113,7 +113,7 @@ If the capture does not contain enough evidence to evaluate a requirement, the r
 | Keysight InfiniiVision multi-channel CSV | Supported through the normal table CSV loader when the file contains named columns |
 | CSV from Python, pandas, MATLAB, LabVIEW, or custom acquisition code | Supported through the normal table CSV loader |
 
-Only the Siglent SDS800X HD per-channel path is currently tested on physical hardware in this project. Other vendor-specific rows describe file-format support, not blanket support for every model from that vendor.
+Only the SDS800X HD per-channel parser has been tested with physical hardware in this project. Other vendor-specific formats have parser tests, not instrument-by-instrument hardware coverage.
 
 See [Input formats](https://github.com/sidelobe-labs/powercontract/blob/main/docs/input-formats.md) and [Oscilloscope vendor notes](https://github.com/sidelobe-labs/powercontract/blob/main/docs/vendors.md) for details.
 

@@ -73,7 +73,7 @@ signals:
 
 PowerContract checks the shared time axis, record length, sample interval, units, horizontal metadata, and instrument identity fields when present.
 
-This path has been tested with a real SDS824X HD export.
+This layout has been tested using an export from hardware in the SDS800X HD series.
 
 ## 3. Source + units CSV
 
