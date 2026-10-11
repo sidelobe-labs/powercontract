@@ -152,7 +152,7 @@ For this input form, each signal's `column` names the Siglent `Source` metadata 
         column: CH3
         nominal: 3.3
 
-The loader requires every requested channel to have the same time axis and matching record/sample metadata. It validates the declared record length and requires seconds/volts units.
+The loader treats explicitly supplied per-channel files as one capture group and validates every supplied file, including channels not referenced by the contract. It requires a shared time axis, matching record/sample metadata and instrument identity when present, validates the declared record length, checks that the declared sample interval matches the actual time axis, rejects duplicate metadata fields, and requires seconds/volts units.
 
 The CSV format itself does not contain an acquisition identifier, so compatible per-channel files are treated as one group because the user supplied them together. PowerContract does not claim stronger provenance than the files provide.
 
