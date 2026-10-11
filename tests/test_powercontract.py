@@ -438,7 +438,7 @@ def test_delay_uncertainty_straddling_minimum_is_indeterminate(tmp_path):
         "Time,C1,C2\n"
         "0,0,0\n"
         "0.001,1,0\n"
-        "0.0029,1,1\n"
+        "0.0038,1,1\n"
         "0.004,1,1\n",
         encoding="utf-8",
     )
