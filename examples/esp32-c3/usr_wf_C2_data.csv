@@ -1,0 +1,19 @@
+Record Length,Analog:7
+Sample Interval,5.000000E-05
+Vertical Units,V,
+Vertical Scale,+1.000000E+00
+Vertical Offset,+0.000000E+00
+Horizontal Units,s
+Horizontal Scale,+5.000000E-05
+Model,SDS824X HD
+Serial Number,EXAMPLE
+Software Version,example
+Source,CH2
+Second,Value
+0.000000,+0.000000
+0.000050,+2.000000
+0.000100,+2.800000
+0.000150,+3.050000
+0.000200,+3.300000
+0.000250,+3.300000
+0.000300,+3.300000
