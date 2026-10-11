@@ -1,0 +1,50 @@
+# Chip-level example derived from the ESP32-C3 Series Datasheet v2.4.
+# Official source: https://documentation.espressif.com/esp32-c3_datasheet_en.html
+# This is not a specification for a dev board's 5 V input or onboard regulator.
+
+version: 1
+capture:
+  time_column: Second
+
+signals:
+  vdd_3v3:
+    column: CH2
+    nominal: 3.3
+  chip_en:
+    column: CH3
+    nominal: 3.3
+
+events:
+  # Figure 2-4 uses 2.8 V as the power-rail timing anchor.
+  vdd_timing_anchor:
+    signal: vdd_3v3
+    direction: above
+    threshold: 2.8
+
+  # Table 5-4: reset release threshold is 0.75 * VDD.
+  # At the nominal 3.3 V used by this example: 0.75 * 3.3 = 2.475 V.
+  chip_en_release:
+    signal: chip_en
+    direction: above
+    threshold: 2.475
+
+requirements:
+  - id: ESP32C3-PWR-001
+    type: delay
+    from: vdd_timing_anchor
+    to: chip_en_release
+    min: 50us
+    source: "ESP32-C3 Series Datasheet v2.4, Section 2.5.3, Figure 2-4 and Table 2-11"
+
+  - id: ESP32C3-PWR-002
+    type: max_value
+    signal: vdd_3v3
+    value: 3.6
+    source: "ESP32-C3 Series Datasheet v2.4, Table 5-2 Recommended Operating Conditions"
+
+  - id: ESP32C3-PWR-003
+    type: min_value
+    signal: vdd_3v3
+    value: 3.0
+    from: chip_en_release
+    source: "ESP32-C3 Series Datasheet v2.4, Table 5-2 Recommended Operating Conditions"
