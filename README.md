@@ -97,6 +97,27 @@ PowerContract evaluates the interval `measured ± uncertainty` conservatively:
 
 The reported margin is the worst-case margin after uncertainty is applied. PowerContract does not infer uncertainty from waveform noise, scope settings, or filtering; the contract must state it explicitly.
 
+## Requirement provenance
+
+A requirement may carry an optional human-readable `source`, such as a datasheet section, table, ticket, or internal specification identifier:
+
+    - id: PWR-001
+      type: delay
+      from: vdd_valid
+      to: reset_release
+      min: 50us
+      source: "ESP32-C3 Series Datasheet v2.4, Table 2-11"
+
+The source is preserved in machine-readable findings, including FAIL and INDETERMINATE results. PowerContract treats it as provenance metadata; it does not fetch, parse, or trust the referenced document automatically.
+
+A chip-level ESP32-C3 example using Siglent-style per-channel CSV files is included under `examples/esp32-c3/`:
+
+    powercontract check examples/esp32-c3/usr_wf_C2_data.csv \
+      examples/esp32-c3/contract.yaml \
+      --with examples/esp32-c3/usr_wf_C3_data.csv
+
+That example encodes the ESP32-C3 3.0–3.6 V recommended supply range and the 50 us minimum power-rail stabilization interval before CHIP_EN release. It intentionally does not claim requirements for a development board's 5 V input or onboard regulator.
+
 ## Requirement types
 
 ### delay
