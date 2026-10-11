@@ -2,13 +2,13 @@
 
 PowerContract validates oscilloscope captures against explicit electrical requirements.
 
-It is intended for board bring-up and regression checks where requirements such as rail ordering, reset timing, voltage limits, and rise time should be checked from measured data rather than by comparing screenshots or golden traces.
+It is intended for board bring-up and regression checks where requirements such as rail ordering, reset timing, voltage limits, and transition time should be checked from measured data rather than by comparing screenshots or golden traces.
 
 PowerContract does not control instruments, decode protocols, or compare waveforms for similarity.
 
 ## Status
 
-Version 0.1.0 is intentionally small. It supports CSV captures, threshold events, stability windows, sequencing delays, voltage extrema, and rise-time limits.
+Version 0.1.0 is intentionally small. It supports CSV captures, threshold events, stability windows, sequencing delays, bounded voltage extrema, and rise/fall-time limits.
 
 ## Install
 
@@ -58,6 +58,8 @@ A contract names capture columns, defines events, and applies requirements to th
         type: max_value
         signal: vdd_3v3
         value: 3.55
+        from: vdd_valid
+        to: reset_release
 
       - id: PWR-003
         type: rise_time
@@ -80,13 +82,19 @@ Measures the time from one named event to another. `min`, `max`, or both may be 
 
 Requires the maximum observed signal value to be at or below a limit.
 
+Optional `from` and `to` event names restrict the measurement to a meaningful interval. Window boundaries are evaluated by linear interpolation between adjacent samples.
+
 ### min_value
 
-Requires the minimum observed signal value to be at or above a limit.
+Requires the minimum observed signal value to be at or above a limit. It accepts the same optional `from` and `to` event bounds as `max_value`.
 
 ### rise_time
 
 Measures the first upward transition between two fractions of a signal's declared nominal voltage. The default fractions are 10% and 90%.
+
+### fall_time
+
+Measures the first downward transition from the high fraction to the low fraction of a signal's declared nominal voltage. The default fractions are 90% and 10%.
 
 ## Events
 
@@ -98,6 +106,14 @@ The configured time and signal columns are explicit. PowerContract scans the fir
 
 Time values are seconds. Signal values are volts in 0.1.0.
 
+## Project boundary
+
+A feature belongs in PowerContract when it helps answer:
+
+> **Did these measured signals satisfy these declared electrical requirements?**
+
+Features whose main purpose is inspecting, visualizing, controlling, decoding, or comparing waveforms belong elsewhere.
+
 ## Non-goals for 0.1
 
 - instrument control or SCPI
@@ -108,7 +124,7 @@ Time values are seconds. Signal values are volts in 0.1.0.
 - a general expression language
 - a plugin framework
 
-These are deliberately outside the first release. The core question is: **did the measured signals satisfy the declared electrical requirements?**
+These are deliberately outside the first release.
 
 ## License
 
