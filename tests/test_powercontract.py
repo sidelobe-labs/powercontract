@@ -151,3 +151,20 @@ def test_extremum_window_rejects_unknown_event():
                 "from": "power_good",
             }],
         })
+
+
+def test_stable_event_detects_interpolated_exit_between_sparse_samples(tmp_path):
+    c = contract()
+    path = write_capture(
+        tmp_path,
+        "0,0,0\n0.001,3.2,0\n0.003,2.0,0\n0.004,3.2,0\n0.007,3.2,2.0\n",
+    )
+    result = evaluate(c, load_capture(path, c))
+    assert result.events["vdd_valid"] > 0.003
+
+
+def test_capture_rejects_non_finite_samples(tmp_path):
+    c = contract()
+    path = write_capture(tmp_path, "0,0,0\n0.001,nan,0\n")
+    with pytest.raises(CaptureError, match="non-finite"):
+        load_capture(path, c)
