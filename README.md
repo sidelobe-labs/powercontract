@@ -1,29 +1,39 @@
 # PowerContract
 
-PowerContract validates oscilloscope captures against explicit electrical requirements.
+**Executable electrical requirements for oscilloscope captures.**
 
-It is intended for board bring-up and regression checks where requirements such as rail ordering, reset timing, voltage limits, and transition time should be checked from measured data rather than by comparing screenshots or golden traces.
+PowerContract checks measured waveforms against explicit power and timing requirements. It is aimed at board bring-up and hardware regression work where rail ordering, reset timing, voltage limits, and transition times should be reviewed as code rather than as screenshots or golden traces.
 
-PowerContract does not control instruments, decode protocols, or compare waveforms for similarity.
+It deliberately does **not** control instruments, decode protocols, or compare waveforms for similarity.
 
-## Status
+## Quick start
 
-Version 0.1.0 is intentionally small. It supports CSV captures, threshold events, stability windows, sequencing delays, bounded voltage extrema, and rise/fall-time limits.
+Install from a checkout:
 
-## Install
+    python -m pip install .
 
-    python -m pip install -e .
+Then evaluate a capture:
+
+    powercontract check examples/boot.csv examples/boot.yaml
+
+PowerContract prints one verdict per requirement and exits with:
+
+- `0` when every requirement passes;
+- `1` when at least one requirement fails or is indeterminate;
+- `2` when the contract, capture, or requested output is invalid.
+
+Check the installed version with:
+
+    powercontract --version
 
 For development:
 
     python -m pip install -e '.[dev]'
     pytest
 
-## Example
+## Contract
 
-    powercontract check examples/boot.csv examples/boot.yaml
-
-A contract names capture columns, defines events, and applies requirements to the measured waveform:
+A contract names measured signals, defines observable events, and applies electrical requirements:
 
     version: 1
     capture:
@@ -42,6 +52,7 @@ A contract names capture columns, defines events, and applies requirements to th
         direction: above
         threshold: 3.0
         stable_for: 2ms
+
       reset_release:
         signal: reset_n
         direction: above
@@ -68,13 +79,15 @@ A contract names capture columns, defines events, and applies requirements to th
         high: 0.9
         max: 5ms
 
-PowerContract reports the measured value and margin for every requirement. A requirement can be `PASS`, `FAIL`, or `INDETERMINATE`. `INDETERMINATE` means the capture does not contain enough evidence to evaluate the requirement safely, including when an explicitly declared measurement uncertainty overlaps a requirement boundary; it is not presented as an electrical failure. Exit code 0 means all requirements passed, 1 means at least one requirement failed or was indeterminate, and 2 means the input or contract was invalid.
+Each result retains the requirement ID, measured value, limits, margin, optional uncertainty, and optional source provenance.
 
-Use `--json report.json` for machine-readable output. Contract parsing is strict: unknown fields, invalid numeric values, and inconsistent references are rejected instead of being silently ignored.
+## Verdicts and uncertainty
 
-## Measurement uncertainty
+A requirement can be `PASS`, `FAIL`, or `INDETERMINATE`.
 
-Every requirement may declare an optional `uncertainty` for the quantity being evaluated. Voltage requirements use volts; timing requirements accept the same duration syntax as their limits.
+`INDETERMINATE` means the capture does not contain enough evidence to make a safe compliance claim. Missing events are indeterminate rather than electrical failures.
+
+Requirements may also declare explicit measurement uncertainty:
 
     - id: VDD-MAX
       type: max_value
@@ -89,17 +102,17 @@ Every requirement may declare an optional `uncertainty` for the quantity being e
       min: 50us
       uncertainty: 10us
 
-PowerContract evaluates the interval `measured ± uncertainty` conservatively:
+PowerContract evaluates `measured ± uncertainty` conservatively:
 
-- the entire interval satisfies the active limit(s): `PASS`
-- the entire interval violates a limit: `FAIL`
-- the interval overlaps a limit boundary: `INDETERMINATE`
+- the entire interval satisfies the active limits → `PASS`;
+- the entire interval violates a limit → `FAIL`;
+- the interval crosses a limit boundary → `INDETERMINATE`.
 
-The reported margin is the worst-case margin after uncertainty is applied. PowerContract does not infer uncertainty from waveform noise, scope settings, or filtering; the contract must state it explicitly.
+The reported margin is the worst-case margin after uncertainty is applied. PowerContract does not infer uncertainty from noise, filtering, or scope settings.
 
 ## Requirement provenance
 
-A requirement may carry an optional human-readable `source`, such as a datasheet section, table, ticket, or internal specification identifier:
+Every requirement may carry an optional human-readable `source`:
 
     - id: PWR-001
       type: delay
@@ -108,59 +121,51 @@ A requirement may carry an optional human-readable `source`, such as a datasheet
       min: 50us
       source: "ESP32-C3 Series Datasheet v2.4, Table 2-11"
 
-The source is preserved in machine-readable findings, including FAIL and INDETERMINATE results. PowerContract treats it as provenance metadata; it does not fetch, parse, or trust the referenced document automatically.
-
-A chip-level ESP32-C3 example using Siglent-style per-channel CSV files is included under `examples/esp32-c3/`:
-
-    powercontract check examples/esp32-c3/usr_wf_C2_data.csv \
-      examples/esp32-c3/contract.yaml \
-      --with examples/esp32-c3/usr_wf_C3_data.csv
-
-That example encodes the ESP32-C3 3.0–3.6 V recommended supply range and the 50 us minimum power-rail stabilization interval before CHIP_EN release. It intentionally does not claim requirements for a development board's 5 V input or onboard regulator.
+The source is preserved in machine-readable output, including FAIL and INDETERMINATE findings. It is metadata only: PowerContract does not fetch or interpret the referenced document.
 
 ## Requirement types
 
-### delay
+### `delay`
 
 Measures the time from one named event to another. `min`, `max`, or both may be supplied.
 
-### max_value
+### `max_value`
 
-Requires the maximum observed signal value to be at or below a limit.
+Requires the maximum observed signal value to be at or below a limit. Optional `from` and `to` events restrict the measurement window.
 
-Optional `from` and `to` event names restrict the measurement to a meaningful interval. Window boundaries are evaluated by linear interpolation between adjacent samples.
+### `min_value`
 
-### min_value
+Requires the minimum observed signal value to be at or above a limit. It accepts the same optional event bounds as `max_value`.
 
-Requires the minimum observed signal value to be at or above a limit. It accepts the same optional `from` and `to` event bounds as `max_value`.
+### `rise_time`
 
-### rise_time
+Measures a completed upward transition between two fractions of a signal's declared nominal voltage. Defaults to 10%–90%. The evaluator pairs the high-threshold crossing with the most recent matching low-threshold crossing so unrelated earlier threshold noise is not mistaken for the start of the transition.
 
-Measures a completed upward transition between two fractions of a signal's declared nominal voltage. The default fractions are 10% and 90%. The high threshold is found first, then the most recent low-threshold crossing before it is used, which avoids pairing a real rise with unrelated earlier threshold noise.
+### `fall_time`
 
-### fall_time
-
-Measures the first downward transition from the high fraction to the low fraction of a signal's declared nominal voltage. The default fractions are 90% and 10%.
+Measures a completed downward transition between the high and low fractions of a signal's declared nominal voltage. Defaults to 90%–10%.
 
 ## Events
 
-An event is the first threshold crossing that satisfies its optional stability window. Crossing time is linearly interpolated between adjacent samples. A stable event is not reported if the capture ends before the entire stability window has been observed.
+An event is the first threshold crossing that satisfies its optional stability window. Crossing times are linearly interpolated between adjacent samples. A stable event is not reported if the capture ends before the requested stability interval has been fully observed.
 
-## CSV input
+## Input formats
 
-For ordinary table CSV, the configured time and signal columns are explicit. PowerContract scans the first 100 lines for a matching table header, which permits common oscilloscope metadata preambles. Comma, semicolon, and tab delimiters are accepted.
+### Ordinary CSV
 
-Time values are seconds. Signal values are volts in 0.1.0.
+Signal columns and the time column are configured explicitly. PowerContract scans the first 100 lines for the configured header, allowing common oscilloscope metadata preambles. Comma, semicolon, and tab delimiters are accepted.
+
+Time values are seconds and signal values are volts in v0.1.0.
 
 ### Siglent SDS800X HD per-channel CSV
 
-SDS800X HD exports one CSV per analog channel. PowerContract accepts those files as one capture group when they are passed explicitly:
+SDS800X HD scopes export one CSV per analog channel. Pass those files as one explicit capture group:
 
     powercontract check usr_wf_C1_data.csv contract.yaml \
       --with usr_wf_C2_data.csv \
       --with usr_wf_C3_data.csv
 
-For this input form, each signal's `column` names the Siglent `Source` metadata value:
+For grouped Siglent input, each signal's `column` names the `Source` metadata value:
 
     signals:
       vin:
@@ -173,9 +178,25 @@ For this input form, each signal's `column` names the Siglent `Source` metadata 
         column: CH3
         nominal: 3.3
 
-The loader treats explicitly supplied per-channel files as one capture group and validates every supplied file, including channels not referenced by the contract. It requires a shared time axis, matching record/sample metadata and instrument identity when present, validates the declared record length, checks that the declared sample interval matches the actual time axis, rejects duplicate metadata fields, and requires seconds/volts units.
+PowerContract validates every supplied file. It checks the shared time axis, declared sample interval, record length, relevant horizontal metadata, duplicate metadata fields, volts/seconds units, and instrument identity when present.
 
-The CSV format itself does not contain an acquisition identifier, so compatible per-channel files are treated as one group because the user supplied them together. PowerContract does not claim stronger provenance than the files provide.
+The CSV format does not contain an acquisition identifier. Files are treated as one acquisition because the user supplied them together; PowerContract does not claim stronger provenance than the export provides.
+
+## ESP32-C3 example
+
+`examples/esp32-c3/` contains a chip-level example using Siglent-style per-channel CSV:
+
+    powercontract check examples/esp32-c3/usr_wf_C2_data.csv \
+      examples/esp32-c3/contract.yaml \
+      --with examples/esp32-c3/usr_wf_C3_data.csv
+
+The example encodes ESP32-C3 chip requirements from the Espressif datasheet. It intentionally does not claim requirements for a development board's 5 V input or onboard regulator.
+
+## JSON output
+
+Use `--json report.json` to write a machine-readable report.
+
+The v0.1.0 report includes a top-level `schema_version` and `powercontract_version` so downstream tooling can identify the format and evaluator version explicitly.
 
 ## Project boundary
 
@@ -185,18 +206,18 @@ A feature belongs in PowerContract when it helps answer:
 
 Features whose main purpose is inspecting, visualizing, controlling, decoding, or comparing waveforms belong elsewhere.
 
-## Non-goals for 0.1
+Explicit non-goals for v0.1.0:
 
-- instrument control or SCPI
-- a waveform viewer
-- protocol decoding
-- golden-waveform comparison
-- automatic datasheet parsing
-- a general expression language
-- a plugin framework
-
-These are deliberately outside the first release.
+- instrument control or SCPI;
+- waveform viewing;
+- protocol decoding;
+- golden-waveform comparison;
+- automatic datasheet parsing;
+- a general expression language;
+- a plugin framework.
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
+
+Release history is documented in [CHANGELOG.md](CHANGELOG.md).
