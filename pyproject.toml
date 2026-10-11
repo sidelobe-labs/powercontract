@@ -38,6 +38,8 @@ classifiers = [
 Homepage = "https://github.com/sidelobe-labs/powercontract"
 Repository = "https://github.com/sidelobe-labs/powercontract"
 Issues = "https://github.com/sidelobe-labs/powercontract/issues"
+Documentation = "https://github.com/sidelobe-labs/powercontract/tree/main/docs"
+Changelog = "https://github.com/sidelobe-labs/powercontract/blob/main/CHANGELOG.md"
 
 [project.scripts]
 powercontract = "powercontract.cli:main"
