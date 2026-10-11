@@ -68,7 +68,7 @@ A contract names capture columns, defines events, and applies requirements to th
         high: 0.9
         max: 5ms
 
-PowerContract reports the measured value and margin for every requirement. Exit code 0 means all requirements passed, 1 means at least one failed, and 2 means the input or contract was invalid.
+PowerContract reports the measured value and margin for every requirement. A requirement can be `PASS`, `FAIL`, or `INDETERMINATE`. `INDETERMINATE` means the capture does not contain enough evidence to evaluate the requirement safely; it is not presented as an electrical failure. Exit code 0 means all requirements passed, 1 means at least one requirement failed or was indeterminate, and 2 means the input or contract was invalid.
 
 Use `--json report.json` for machine-readable output.
 
