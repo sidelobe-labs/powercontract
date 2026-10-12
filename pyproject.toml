@@ -35,8 +35,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sidelobe-labs/powercontract"
+Homepage = "https://sidelobe.dev/open-source/powercontract/"
 PyPI = "https://pypi.org/project/powercontract/"
+CaseStudy = "https://artur.panek.tech/work/powercontract/"
+EngineeringNote = "https://artur.panek.tech/notes/checking-power-up-timing/"
 Repository = "https://github.com/sidelobe-labs/powercontract"
 Issues = "https://github.com/sidelobe-labs/powercontract/issues"
 Documentation = "https://github.com/sidelobe-labs/powercontract/tree/main/docs"
