@@ -51,7 +51,7 @@ powercontract = "powercontract.cli:main"
 dev = [
   "build>=1.2,<2",
   "pytest>=8,<10",
-  "twine>=6,<7",
+  "twine>=7.0.0,<8",
 ]
 
 [tool.setuptools.dynamic]
