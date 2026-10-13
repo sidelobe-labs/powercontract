@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.1 - 2026-10-14
+
 ### Changed
 
 - made PyPI the default installation path in user documentation;
@@ -9,7 +11,8 @@
 - made README documentation links work from both GitHub and PyPI;
 - updated release documentation for the post-0.1.0 workflow;
 - added PyPI, documentation, and changelog project links to package metadata;
-- clarified the README introduction and package summary.
+- clarified the README introduction and package summary;
+- checked links in the built package description before publishing.
 
 ## 0.1.0 - 2026-10-11
 
