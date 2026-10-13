@@ -91,7 +91,7 @@ jobs:
       RELEASE_TAG: ${{ needs.build.outputs.tag }}
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-distributions
           path: dist
@@ -122,7 +122,7 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: release-distributions
           path: dist
