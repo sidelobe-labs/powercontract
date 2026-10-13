@@ -3,8 +3,10 @@ name: Release
 on:
   workflow_dispatch:
   push:
-    tags:
-      - "v[0-9]*"
+    branches:
+      - main
+    paths:
+      - "src/powercontract/__init__.py"
 
 jobs:
   build:
@@ -36,6 +38,7 @@ jobs:
 
       - run: python -m build
       - run: python -m twine check dist/*
+      - run: python scripts/check-package-links.py dist/*.whl
 
       - name: Resolve version and tag
         id: release
@@ -54,27 +57,20 @@ jobs:
           )"
           TAG="v$VERSION"
 
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
-              echo "manual releases must be started from $DEFAULT_BRANCH" >&2
-              exit 1
-            fi
-
-            if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-              echo "tag $TAG already exists" >&2
-              exit 1
-            fi
-
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$TAG" -m "PowerContract $TAG"
-            git push origin "$TAG"
-          else
-            if [ "$GITHUB_REF_NAME" != "$TAG" ]; then
-              echo "tag $GITHUB_REF_NAME does not match package version $TAG" >&2
-              exit 1
-            fi
+          if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            echo "releases must run from $DEFAULT_BRANCH" >&2
+            exit 1
           fi
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists" >&2
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "PowerContract $TAG"
+          git push origin "$TAG"
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
