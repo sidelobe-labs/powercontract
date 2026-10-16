@@ -166,6 +166,14 @@ def test_stable_event_detects_interpolated_exit_between_sparse_samples(tmp_path)
     assert result.events["vdd_valid"] > 0.003
 
 
+def test_table_csv_rejects_rows_with_extra_fields(tmp_path):
+    c = contract()
+    path = write_capture(tmp_path, "0,0,0,4.2\n0.001,3.3,0\n")
+
+    with pytest.raises(CaptureError, match="row 2 has more fields"):
+        load_capture(path, c)
+
+
 def test_capture_rejects_non_finite_samples(tmp_path):
     c = contract()
     path = write_capture(tmp_path, "0,0,0\n0.001,nan,0\n")

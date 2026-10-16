@@ -63,6 +63,8 @@ def _load_table_csv(lines: list[str], contract: Contract) -> Capture:
     times: list[float] = []
     signal_values: dict[str, list[float]] = {name: [] for name in contract.signals}
     for row_number, row in enumerate(reader, start=header_index + 2):
+        if None in row:
+            raise CaptureError(f"row {row_number} has more fields than the CSV header")
         if not any((value or "").strip() for value in row.values()):
             continue
         try:
