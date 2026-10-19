@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- reject NaN, infinity and overflowing timing values before evaluating a capture.
+
 ## 0.1.1 - 2026-10-14
 
 ### Changed

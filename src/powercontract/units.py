@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from math import isfinite
 
 from .errors import SpecError
 
@@ -12,7 +13,10 @@ def duration_seconds(value: object, *, field: str) -> float:
     if isinstance(value, bool):
         raise SpecError(f"{field} must be a duration")
     if isinstance(value, (int, float)):
-        result = float(value)
+        try:
+            result = float(value)
+        except OverflowError as exc:
+            raise SpecError(f"{field} must be finite") from exc
     elif isinstance(value, str):
         match = _DURATION_RE.match(value)
         if not match:
@@ -21,6 +25,8 @@ def duration_seconds(value: object, *, field: str) -> float:
         result = float(number) * _DURATION_SCALE[(unit or "s").lower()]
     else:
         raise SpecError(f"{field} must be a duration")
+    if not isfinite(result):
+        raise SpecError(f"{field} must be finite")
     if result < 0:
         raise SpecError(f"{field} must be >= 0")
     return result
