@@ -129,7 +129,7 @@ Measures a completed upward transition between two fractions of nominal voltage:
 
 The defaults are 10% and 90%.
 
-The evaluator first finds a completed high-threshold crossing, then pairs it with the most recent low-threshold crossing before it. This avoids using an unrelated earlier noise crossing as the start of the rise.
+The evaluator uses the first high-threshold crossing that has a low-threshold crossing before it in the capture, paired with the most recent such low crossing. If the capture begins partway through a rise, an unmatched high crossing is skipped. This avoids using an unrelated earlier noise crossing as the start of the rise. If no complete pair is present, the result is `INDETERMINATE`.
 
 ### `fall_time`
 
@@ -145,6 +145,8 @@ Measures a completed downward transition:
 ```
 
 The defaults are 90% to 10%.
+
+Fall-time uses the same pairing rule with the thresholds and direction reversed.
 
 ## Measurement uncertainty
 
