@@ -189,4 +189,4 @@ Accepted suffixes:
 - `us` or `µs`
 - `ns`
 
-A bare numeric duration is interpreted as seconds.
+A bare numeric duration is interpreted as seconds. Durations must be finite and non-negative; NaN and infinity are not valid durations.
