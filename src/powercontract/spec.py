@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Hashable
 from pathlib import Path
 
 import yaml
+from yaml.constructor import ConstructorError
 
 from .errors import SpecError
 from .model import Contract, EventSpec, RequirementSpec, SignalSpec
 from .units import duration_seconds, finite_float
 
 _SUPPORTED_REQUIREMENTS = {"delay", "max_value", "min_value", "rise_time", "fall_time"}
+_MERGE_KEY = object()
 
 _ROOT_KEYS = {"version", "capture", "signals", "events", "requirements"}
 _CAPTURE_KEYS = {"time_column"}
@@ -24,9 +27,42 @@ _REQUIREMENT_KEYS = {
 }
 
 
+class _ContractLoader(yaml.SafeLoader):
+    def __init__(self, stream: str) -> None:
+        super().__init__(stream)
+        self._checked_mappings: set[yaml.MappingNode] = set()
+
+    def flatten_mapping(self, node: yaml.MappingNode) -> None:
+        # Check explicit keys before merges add inherited keys and valid overrides.
+        # A shared anchor may already have been flattened for another mapping.
+        if node not in self._checked_mappings:
+            seen: set[object] = set()
+            for key_node, _ in node.value:
+                if key_node.tag == "tag:yaml.org,2002:merge":
+                    key = _MERGE_KEY
+                elif key_node.tag == "tag:yaml.org,2002:value":
+                    key = key_node.value
+                else:
+                    key = self.construct_object(key_node)
+                if not isinstance(key, Hashable):
+                    raise ConstructorError(
+                        "while constructing a mapping", node.start_mark,
+                        "found unhashable key", key_node.start_mark,
+                    )
+                if key in seen:
+                    label = key_node.value if key is _MERGE_KEY else key
+                    raise ConstructorError(
+                        "while constructing a mapping", node.start_mark,
+                        f"found duplicate key {label!r}", key_node.start_mark,
+                    )
+                seen.add(key)
+            self._checked_mappings.add(node)
+        super().flatten_mapping(node)
+
+
 def load_contract(path: str | Path) -> Contract:
     try:
-        data = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
+        data = yaml.load(Path(path).read_text(encoding="utf-8"), Loader=_ContractLoader)
     except OSError as exc:
         raise SpecError(f"cannot read contract: {exc}") from exc
     except yaml.YAMLError as exc:

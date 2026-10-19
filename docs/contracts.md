@@ -10,7 +10,7 @@ events: {}
 requirements: []
 ```
 
-The parser is strict. Unknown fields are rejected.
+The parser rejects unknown fields and duplicate keys in the same mapping. YAML anchors and merges are supported: an explicit field can override an inherited value, and the first mapping in a merge list takes precedence.
 
 ## Capture
 
