@@ -245,21 +245,19 @@ def _paired_transition_crossings(
     direction: str,
 ) -> tuple[float, float] | None:
     if direction == "up":
+        start_candidates = _crossings(times, values, low, up=True)
         end_candidates = _crossings(times, values, high, up=True)
-        if not end_candidates:
-            return None
-        end = end_candidates[0]
-        start_candidates = [t for t in _crossings(times, values, low, up=True) if t <= end]
     else:
+        start_candidates = _crossings(times, values, high, up=False)
         end_candidates = _crossings(times, values, low, up=False)
-        if not end_candidates:
-            return None
-        end = end_candidates[0]
-        start_candidates = [t for t in _crossings(times, values, high, up=False) if t <= end]
 
-    if not start_candidates:
-        return None
-    return start_candidates[-1], end
+    for end in end_candidates:
+        # A capture can start partway through an edge. Skip its unmatched end
+        # crossing, then use the first complete transition and its latest start.
+        count = bisect_right(start_candidates, end)
+        if count:
+            return start_candidates[count - 1], end
+    return None
 
 
 def _crossings(

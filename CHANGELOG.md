@@ -6,6 +6,7 @@
 
 - reject NaN, infinity and overflowing timing values before evaluating a capture;
 - reject duplicate YAML keys instead of silently replacing contract values; preserve anchors and merge overrides.
+- measure the first complete rise or fall after an edge that began before the capture.
 
 ## 0.1.1 - 2026-10-14
 
