@@ -318,7 +318,7 @@ def test_siglent_csv_rejects_rows_with_extra_fields(tmp_path):
             "value": 4.0,
         }],
     })
-    path = write_siglent_trace(tmp_path, "CH1", "0,0,999\\n0.001,3.3")
+    path = write_siglent_trace(tmp_path, "CH1", "0,0,999\n0.001,3.3")
 
     with pytest.raises(CaptureError, match="more fields than the CSV header"):
         load_capture(path, c)
