@@ -426,6 +426,8 @@ def _read_siglent_trace(
     times: list[float] = []
     values: list[float] = []
     for row_number, row in enumerate(reader, start=header_index + 2):
+        if None in row:
+            raise CaptureError(f"{path}: row {row_number} has more fields than the CSV header")
         try:
             t = float(row["Second"])
             value = float(row["Value"])

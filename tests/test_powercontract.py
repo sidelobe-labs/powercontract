@@ -305,6 +305,25 @@ def test_loads_realistic_siglent_per_channel_csv_group(tmp_path):
     assert capture.signals["reset"][-1] == pytest.approx(3.3)
 
 
+def test_siglent_csv_rejects_rows_with_extra_fields(tmp_path):
+    c = parse_contract({
+        "version": 1,
+        "capture": {"time_column": "Second"},
+        "signals": {"vdd": {"column": "CH1"}},
+        "events": {},
+        "requirements": [{
+            "id": "VDD-MAX",
+            "type": "max_value",
+            "signal": "vdd",
+            "value": 4.0,
+        }],
+    })
+    path = write_siglent_trace(tmp_path, "CH1", "0,0,999\n0.001,3.3")
+
+    with pytest.raises(CaptureError, match="more fields than the CSV header"):
+        load_capture(path, c)
+
+
 def test_siglent_group_rejects_mismatched_time_axes(tmp_path):
     c = parse_contract({
         "version": 1,
