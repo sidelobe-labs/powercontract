@@ -149,6 +149,8 @@ signals:
     column: Value
 ```
 
+Rows containing a sample time or value must provide both as numeric values. Metadata-only rows and blank lines are ignored.
+
 For multi-rail checks, export one multi-channel table or normalize separate traces into one table before evaluation.
 
 ## Multi-file input

@@ -314,13 +314,13 @@ def _load_legacy_metadata_xy_csv(lines: list[str], contract: Contract, path: Pat
     values: list[float] = []
     for row_number, line in enumerate(lines, start=1):
         fields = _row(line)
-        if len(fields) < 5:
+        if len(fields) <= 3:
             continue
         try:
             t = float(fields[3])
             value = float(fields[4])
-        except ValueError:
-            continue
+        except (IndexError, ValueError) as exc:
+            raise CaptureError(f"{path}: row {row_number} contains invalid legacy XY data") from exc
         _validate_sample_row(t, (value,), row_number, path)
         if times and t <= times[-1]:
             raise CaptureError(f"{path}: time must be strictly increasing (row {row_number})")
