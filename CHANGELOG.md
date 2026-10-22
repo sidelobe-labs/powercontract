@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- reject incomplete or non-numeric samples in Tektronix five-column CSV files instead of skipping them.
+
 ## 0.1.2 - 2026-10-20
 
 ### Fixed
