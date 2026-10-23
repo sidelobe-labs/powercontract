@@ -890,3 +890,31 @@ def test_non_siglent_multifile_group_is_rejected_with_actionable_error(tmp_path)
     second.write_text("Source,CH1,CH2\nSecond,Volt,Volt\n0,0,0\n1,1,1\n", encoding="utf-8")
     with pytest.raises(CaptureError, match="single multi-channel CSV"):
         load_capture(first, c, [second])
+
+
+def test_source_units_csv_rejects_extra_sample_columns(tmp_path):
+    path = tmp_path / "source.csv"
+    path.write_text(
+        "Source,C1,C2\n"
+        "Second,Volt,Volt\n"
+        "0,0,0,999\n"
+        "0.001,3.3,2.0\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CaptureError, match="row 3 has more fields than the CSV header"):
+        load_capture(path, contract())
+
+
+def test_paired_xy_csv_rejects_extra_sample_columns(tmp_path):
+    path = tmp_path / "paired.csv"
+    path.write_text(
+        "X(C1),C1,X(C2),C2\n"
+        "Second,Volt,Second,Volt\n"
+        "0,0,0,0,999\n"
+        "0.001,3.3,0.001,2.0\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(CaptureError, match="row 3 has more fields than the CSV header"):
+        load_capture(path, contract())
