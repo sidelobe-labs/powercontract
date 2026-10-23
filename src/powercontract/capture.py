@@ -192,6 +192,8 @@ def _load_source_units_csv(lines: list[str], contract: Contract, path: Path) -> 
         fields = _row(line)
         if not fields or not any(fields):
             continue
+        if len(fields) > len(names):
+            raise CaptureError(f"{path}: row {row_number} has more fields than the CSV header")
         try:
             t = float(fields[0])
             values = {
@@ -242,6 +244,8 @@ def _load_paired_xy_csv(lines: list[str], contract: Contract, path: Path) -> Cap
         fields = _row(line)
         if not fields or not any(fields):
             continue
+        if len(fields) > len(names):
+            raise CaptureError(f"{path}: row {row_number} has more fields than the CSV header")
         for source in expected:
             time_index, value_index = source_positions[source]
             try:
