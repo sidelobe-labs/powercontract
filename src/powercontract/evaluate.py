@@ -62,16 +62,18 @@ def _find_event(capture: Capture, spec: EventSpec) -> float | None:
         after = _condition(values[i], spec)
         if before or not after:
             continue
-        crossing = _crossing_time(times[i - 1], values[i - 1], times[i], values[i], spec.threshold)
+        # Keep interpolation and stability arithmetic local so a large time
+        # origin cannot round away a short crossing offset or stability interval.
+        origin = times[i - 1]
+        crossing = _crossing_time(0.0, values[i - 1], times[i] - origin, values[i], spec.threshold)
         if spec.stable_for == 0:
-            return crossing
+            return origin + crossing
 
-        deadline = crossing + spec.stable_for
-        if times[-1] < deadline:
+        if times[-1] - origin - crossing < spec.stable_for:
             continue
-        exit_time = _next_condition_exit(times, values, spec, start_index=i)
-        if exit_time is None or exit_time >= deadline:
-            return crossing
+        exit_time = _next_condition_exit(times, values, spec, start_index=i, origin=origin)
+        if exit_time is None or exit_time - crossing >= spec.stable_for:
+            return origin + crossing
     return None
 
 
@@ -81,12 +83,16 @@ def _next_condition_exit(
     spec: EventSpec,
     *,
     start_index: int,
+    origin: float,
 ) -> float | None:
     for i in range(start_index + 1, len(times)):
         before = _condition(values[i - 1], spec)
         after = _condition(values[i], spec)
         if before and not after:
-            return _crossing_time(times[i - 1], values[i - 1], times[i], values[i], spec.threshold)
+            return _crossing_time(
+                times[i - 1] - origin, values[i - 1],
+                times[i] - origin, values[i], spec.threshold,
+            )
     return None
 
 

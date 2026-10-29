@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- evaluate event stability on a local time axis so short intervals and interpolated crossing offsets do not round away at large timestamps.
 - reject incomplete or non-numeric samples in Tektronix five-column CSV files instead of skipping them.
 
 ## 0.1.2 - 2026-10-20
