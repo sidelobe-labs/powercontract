@@ -111,6 +111,8 @@ time = Start + Sequence * Increment
 
 Signal names remain `CH1`, `CH2`, and so on.
 
+Sample rows contain the sequence number followed by channel values. `Start` and `Increment` provide metadata in the second header row, not per-sample values. Trailing empty fields are accepted; non-empty fields after the last channel are rejected.
+
 ## 5. Rigol paired XY CSV
 
 Another Rigol layout gives each channel a time/value pair:

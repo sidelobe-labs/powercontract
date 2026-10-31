@@ -38,6 +38,12 @@ PowerContract does not reorder samples automatically.
 
 For segmented-memory captures, export one segment or normalize the segments before evaluation.
 
+## “more fields than the Rigol sample columns”
+
+A Rigol sequence CSV row contains a non-empty field after the sequence number and declared channels. Check the reported row for shifted delimiters or appended values.
+
+`Start` and `Increment` contain metadata in the second header row. Those positions may be empty in sample rows, but additional values are not waveform channels. Re-export the capture or correct the conversion that produced it.
+
 ## “multi-file capture groups currently require Siglent”
 
 Automatic multi-file grouping is limited to the Siglent SDS800X HD per-channel format in v0.1.
