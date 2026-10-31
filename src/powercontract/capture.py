@@ -140,6 +140,8 @@ def _load_rigol_sequence_csv(lines: list[str], contract: Contract, path: Path) -
         fields = _row(line)
         if not fields or not any(fields):
             continue
+        if len(fields) > start_index:
+            raise CaptureError(f"{path}: row {row_number} has more fields than the Rigol sample columns")
         try:
             sequence = float(fields[0])
             t = start + sequence * increment
