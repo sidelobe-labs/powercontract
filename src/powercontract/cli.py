@@ -71,6 +71,14 @@ def main(argv: list[str] | None = None) -> int:
         payload = {
             "schema_version": 1,
             "powercontract_version": __version__,
+            "inputs": {
+                "contract_sha256": contract.source_sha256,
+                "capture_sha256": list(capture.source_sha256),
+            },
+            "capture": {
+                "sample_count": len(capture.time),
+                "time_range_s": [capture.time[0], capture.time[-1]],
+            },
             "passed": result.passed,
             "events": result.events,
             "findings": [finding.as_dict() for finding in result.findings],
