@@ -36,12 +36,14 @@ class Contract:
     signals: dict[str, SignalSpec]
     events: dict[str, EventSpec]
     requirements: tuple[RequirementSpec, ...]
+    source_sha256: str | None = None
 
 
 @dataclass(frozen=True)
 class Capture:
     time: tuple[float, ...]
     signals: dict[str, tuple[float, ...]]
+    source_sha256: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

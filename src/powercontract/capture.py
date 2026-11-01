@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import replace
+from hashlib import sha256
 from math import isclose, isfinite
 from pathlib import Path
 
@@ -14,18 +16,24 @@ def load_capture(
     additional_paths: list[str | Path] | None = None,
 ) -> Capture:
     paths = [Path(path), *(Path(p) for p in (additional_paths or []))]
+    sources = [_read_source(path) for path in paths]
+    capture = _load_sources(paths, [lines for lines, _ in sources], contract)
+    return replace(capture, source_sha256=tuple(digest for _, digest in sources))
+
+
+def _load_sources(paths: list[Path], sources: list[list[str]], contract: Contract) -> Capture:
     if len(paths) > 1:
-        if all(_looks_like_siglent_csv(_read_lines(path)) for path in paths):
-            return _load_siglent_group(paths, contract)
+        if all(_looks_like_siglent_csv(lines) for lines in sources):
+            return _load_siglent_group(paths, sources, contract)
         raise CaptureError(
             "multi-file capture groups currently require Siglent per-channel CSV; "
             "use a single multi-channel CSV for other formats"
         )
 
     path = paths[0]
-    lines = _read_lines(path)
+    lines = sources[0]
     if _looks_like_siglent_csv(lines):
-        return _load_siglent_group(paths, contract)
+        return _load_siglent_group(paths, sources, contract)
     if _looks_like_rigol_sequence_csv(lines):
         return _load_rigol_sequence_csv(lines, contract, path)
     if _looks_like_paired_xy_csv(lines):
@@ -37,14 +45,15 @@ def load_capture(
     return _load_table_csv(lines, contract)
 
 
-def _read_lines(path: Path) -> list[str]:
+def _read_source(path: Path) -> tuple[list[str], str]:
     try:
-        lines = path.read_text(encoding="utf-8-sig").splitlines()
+        content = path.read_bytes()
     except OSError as exc:
         raise CaptureError(f"cannot read capture {path}: {exc}") from exc
+    lines = content.decode("utf-8-sig").splitlines()
     if not lines:
         raise CaptureError(f"capture {path} is empty")
-    return lines
+    return lines, sha256(content).hexdigest()
 
 
 def _load_table_csv(lines: list[str], contract: Contract) -> Capture:
@@ -341,10 +350,10 @@ def _looks_like_siglent_csv(lines: list[str]) -> bool:
     return "Second,Value" in head and any(line.startswith("Source,CH") for line in head)
 
 
-def _load_siglent_group(paths: list[Path], contract: Contract) -> Capture:
+def _load_siglent_group(paths: list[Path], sources: list[list[str]], contract: Contract) -> Capture:
     traces: dict[str, tuple[dict[str, str], tuple[float, ...], tuple[float, ...]]] = {}
-    for path in paths:
-        metadata, times, values = _read_siglent_trace(path)
+    for path, lines in zip(paths, sources):
+        metadata, times, values = _read_siglent_trace(path, lines)
         source = metadata["Source"]
         if source in traces:
             raise CaptureError(f"Siglent source {source} appears more than once")
@@ -395,8 +404,8 @@ def _load_siglent_group(paths: list[Path], contract: Contract) -> Capture:
 
 def _read_siglent_trace(
     path: Path,
+    lines: list[str],
 ) -> tuple[dict[str, str], tuple[float, ...], tuple[float, ...]]:
-    lines = _read_lines(path)
     try:
         header_index = lines.index("Second,Value")
     except ValueError as exc:

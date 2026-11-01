@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Hashable
+from dataclasses import replace
+from hashlib import sha256
 from pathlib import Path
 
 import yaml
@@ -62,12 +64,13 @@ class _ContractLoader(yaml.SafeLoader):
 
 def load_contract(path: str | Path) -> Contract:
     try:
-        data = yaml.load(Path(path).read_text(encoding="utf-8"), Loader=_ContractLoader)
+        content = Path(path).read_bytes()
+        data = yaml.load(content.decode("utf-8"), Loader=_ContractLoader)
     except OSError as exc:
         raise SpecError(f"cannot read contract: {exc}") from exc
     except yaml.YAMLError as exc:
         raise SpecError(f"invalid YAML: {exc}") from exc
-    return parse_contract(data)
+    return replace(parse_contract(data), source_sha256=sha256(content).hexdigest())
 
 
 def parse_contract(data: object) -> Contract:

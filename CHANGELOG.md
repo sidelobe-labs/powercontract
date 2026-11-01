@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- include exact-byte contract and capture SHA-256 hashes, sample count and capture time range in JSON reports, without adding input paths.
+
 ### Fixed
 
 - reject incomplete or non-numeric samples in Tektronix five-column CSV files instead of skipping them.
