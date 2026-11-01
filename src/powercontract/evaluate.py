@@ -2,10 +2,28 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from dataclasses import dataclass, replace
+from math import fsum, isfinite
 
 from .errors import PowerContractError
 from .model import Capture, Contract, EventSpec, Finding, RequirementSpec
 from .units import duration_seconds, finite_float, format_seconds
+
+
+@dataclass(frozen=True, order=True)
+class _TimePoint:
+    # Anchor to the nearest sample, keeping offsets within half an interval.
+    # This makes (index, offset) chronological even on an irregular time axis.
+    index: int
+    offset: float = 0.0
+
+    def elapsed_since(self, other: _TimePoint, times: tuple[float, ...]) -> float:
+        terms = (times[self.index], self.offset, -times[other.index], -other.offset)
+        try:
+            return fsum(terms)
+        except OverflowError:
+            # A finite interval can have overflowing intermediate sums when
+            # opposite-sign sample timestamps approach the float range limit.
+            return fsum(value / 2 for value in terms) * 2
 
 
 @dataclass(frozen=True)
@@ -19,7 +37,7 @@ class Evaluation:
 
 
 def evaluate(contract: Contract, capture: Capture) -> Evaluation:
-    events: dict[str, float] = {}
+    events: dict[str, _TimePoint] = {}
     for name, spec in contract.events.items():
         event_time = _find_event(capture, spec)
         if event_time is not None:
@@ -32,7 +50,9 @@ def evaluate(contract: Contract, capture: Capture) -> Evaluation:
         )
         for req in contract.requirements
     )
-    return Evaluation(findings, events)
+    return Evaluation(findings, {
+        name: capture.time[point.index] + point.offset for name, point in events.items()
+    })
 
 
 def _attach_requirement_source(finding: Finding, req: RequirementSpec) -> Finding:
@@ -46,15 +66,29 @@ def _condition(value: float, spec: EventSpec) -> bool:
     return value >= spec.threshold if spec.direction == "above" else value <= spec.threshold
 
 
-def _crossing_time(t0: float, v0: float, t1: float, v1: float, threshold: float) -> float:
-    if v1 == v0:
-        return t1
-    ratio = (threshold - v0) / (v1 - v0)
-    ratio = min(1.0, max(0.0, ratio))
-    return t0 + ratio * (t1 - t0)
+def _crossing_point(
+    times: tuple[float, ...], values: tuple[float, ...], index: int, threshold: float,
+) -> _TimePoint:
+    v0, v1 = values[index - 1], values[index]
+    span = v1 - v0
+    if not isfinite(span):
+        v0, v1, threshold = v0 / 2, v1 / 2, threshold / 2
+        span = v1 - v0
+    if abs(threshold - v0) <= abs(threshold - v1):
+        anchor = index - 1
+        fraction = (threshold - v0) / span
+    else:
+        anchor = index
+        fraction = (threshold - v1) / span
+    interval = times[index] - times[index - 1]
+    if isfinite(interval):
+        offset = fraction * interval
+    else:
+        offset = (times[index] / 2 - times[index - 1] / 2) * fraction * 2
+    return _TimePoint(anchor, offset)
 
 
-def _find_event(capture: Capture, spec: EventSpec) -> float | None:
+def _find_event(capture: Capture, spec: EventSpec) -> _TimePoint | None:
     values = capture.signals[spec.signal]
     times = capture.time
     for i in range(1, len(times)):
@@ -62,18 +96,15 @@ def _find_event(capture: Capture, spec: EventSpec) -> float | None:
         after = _condition(values[i], spec)
         if before or not after:
             continue
-        # Keep interpolation and stability arithmetic local so a large time
-        # origin cannot round away a short crossing offset or stability interval.
-        origin = times[i - 1]
-        crossing = _crossing_time(0.0, values[i - 1], times[i] - origin, values[i], spec.threshold)
+        crossing = _crossing_point(times, values, i, spec.threshold)
         if spec.stable_for == 0:
-            return origin + crossing
+            return crossing
 
-        if times[-1] - origin - crossing < spec.stable_for:
+        if _TimePoint(len(times) - 1).elapsed_since(crossing, times) < spec.stable_for:
             continue
-        exit_time = _next_condition_exit(times, values, spec, start_index=i, origin=origin)
-        if exit_time is None or exit_time - crossing >= spec.stable_for:
-            return origin + crossing
+        exit_time = _next_condition_exit(times, values, spec, start_index=i)
+        if exit_time is None or exit_time.elapsed_since(crossing, times) >= spec.stable_for:
+            return crossing
     return None
 
 
@@ -83,26 +114,24 @@ def _next_condition_exit(
     spec: EventSpec,
     *,
     start_index: int,
-    origin: float,
-) -> float | None:
+) -> _TimePoint | None:
     for i in range(start_index + 1, len(times)):
         before = _condition(values[i - 1], spec)
         after = _condition(values[i], spec)
         if before and not after:
-            return _crossing_time(
-                times[i - 1] - origin, values[i - 1],
-                times[i] - origin, values[i], spec.threshold,
-            )
+            return _crossing_point(times, values, i, spec.threshold)
     return None
 
 
-def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Capture, events: dict[str, float]) -> Finding:
+def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Capture, events: dict[str, _TimePoint]) -> Finding:
     raw = req.raw
     if req.type == "delay":
         start, end = str(raw["from"]), str(raw["to"])
         if start not in events or end not in events:
             return _missing_event_finding(req.id, [name for name in (start, end) if name not in events])
-        measured = events[end] - events[start]
+        measured = events[end].elapsed_since(events[start], capture.time)
+        if not isfinite(measured):
+            return Finding(req.id, "INDETERMINATE", "timing interval exceeds the numeric range")
         minimum = duration_seconds(raw["min"], field=f"{req.id}.min") if "min" in raw else None
         maximum = duration_seconds(raw["max"], field=f"{req.id}.max") if "max" in raw else None
         uncertainty = duration_seconds(raw.get("uncertainty", 0), field=f"{req.id}.uncertainty")
@@ -192,7 +221,9 @@ def _evaluate_requirement(req: RequirementSpec, contract: Contract, capture: Cap
             transition = f"{low_fraction:.0%}-{high_fraction:.0%} rise time"
         else:
             transition = f"{high_fraction:.0%}-{low_fraction:.0%} fall time"
-        measured = end_time - start_time
+        measured = end_time.elapsed_since(start_time, capture.time)
+        if not isfinite(measured):
+            return Finding(req.id, "INDETERMINATE", "timing interval exceeds the numeric range")
         limit = duration_seconds(raw["max"], field=f"{req.id}.max")
         uncertainty = duration_seconds(raw.get("uncertainty", 0), field=f"{req.id}.uncertainty")
         status, margin = _classify_interval(measured, uncertainty, None, limit)
@@ -249,7 +280,7 @@ def _paired_transition_crossings(
     low: float,
     high: float,
     direction: str,
-) -> tuple[float, float] | None:
+) -> tuple[_TimePoint, _TimePoint] | None:
     if direction == "up":
         start_candidates = _crossings(times, values, low, up=True)
         end_candidates = _crossings(times, values, high, up=True)
@@ -272,17 +303,15 @@ def _crossings(
     threshold: float,
     *,
     up: bool,
-) -> list[float]:
-    result: list[float] = []
+) -> list[_TimePoint]:
+    result: list[_TimePoint] = []
     for i in range(1, len(times)):
         if up:
             crossed = values[i - 1] < threshold <= values[i]
         else:
             crossed = values[i - 1] > threshold >= values[i]
         if crossed:
-            result.append(
-                _crossing_time(times[i - 1], values[i - 1], times[i], values[i], threshold)
-            )
+            result.append(_crossing_point(times, values, i, threshold))
     return result
 
 
@@ -297,8 +326,8 @@ def _missing_event_finding(requirement_id: str, missing: list[str]) -> Finding:
 def _measurement_window(
     req: RequirementSpec,
     capture: Capture,
-    events: dict[str, float],
-) -> tuple[float, float, str] | Finding:
+    events: dict[str, _TimePoint],
+) -> tuple[_TimePoint, _TimePoint, str] | Finding:
     raw = req.raw
     from_name = str(raw["from"]) if "from" in raw else None
     to_name = str(raw["to"]) if "to" in raw else None
@@ -306,8 +335,8 @@ def _measurement_window(
     if missing:
         return _missing_event_finding(req.id, missing)
 
-    start = events[from_name] if from_name is not None else capture.time[0]
-    end = events[to_name] if to_name is not None else capture.time[-1]
+    start = events[from_name] if from_name is not None else _TimePoint(0)
+    end = events[to_name] if to_name is not None else _TimePoint(len(capture.time) - 1)
     if start > end:
         return Finding(req.id, "FAIL", f"measurement window is reversed: {from_name} occurs after {to_name}")
 
@@ -325,27 +354,29 @@ def _measurement_window(
 def _values_in_window(
     times: tuple[float, ...],
     values: tuple[float, ...],
-    start: float,
-    end: float,
+    start: _TimePoint,
+    end: _TimePoint,
 ) -> tuple[float, ...]:
     if start == end:
         return (_value_at(times, values, start),)
     result = [_value_at(times, values, start)]
-    result.extend(value for time, value in zip(times, values) if start < time < end)
+    first = start.index + (start.offset >= 0)
+    stop = end.index + (end.offset > 0)
+    result.extend(values[first:stop])
     result.append(_value_at(times, values, end))
     return tuple(result)
 
 
-def _value_at(times: tuple[float, ...], values: tuple[float, ...], time: float) -> float:
-    if time <= times[0]:
-        return values[0]
-    if time >= times[-1]:
-        return values[-1]
-    right = bisect_right(times, time)
-    left = right - 1
-    if times[left] == time:
-        return values[left]
-    t0, t1 = times[left], times[right]
-    v0, v1 = values[left], values[right]
-    fraction = (time - t0) / (t1 - t0)
-    return v0 + fraction * (v1 - v0)
+def _value_at(times: tuple[float, ...], values: tuple[float, ...], point: _TimePoint) -> float:
+    if point.offset == 0:
+        return values[point.index]
+    neighbour = point.index + (1 if point.offset > 0 else -1)
+    interval = times[neighbour] - times[point.index]
+    if isfinite(interval):
+        fraction = point.offset / interval
+    else:
+        fraction = (point.offset / 2) / (times[neighbour] / 2 - times[point.index] / 2)
+    value, adjacent = values[point.index], values[neighbour]
+    if isfinite(adjacent - value):
+        return value + fraction * (adjacent - value)
+    return (1 - fraction) * value + fraction * adjacent
