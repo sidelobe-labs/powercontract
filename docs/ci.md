@@ -50,12 +50,20 @@ An `INDETERMINATE` result returns exit code 1. A CI job therefore fails when the
 
 ## JSON report
 
-The report includes both the report schema version and PowerContract version:
+The report includes the report schema and PowerContract versions, input hashes, and the evaluated capture's sample count and time range:
 
 ```json
 {
   "schema_version": 1,
-  "powercontract_version": "0.1.0",
+  "powercontract_version": "0.1.2",
+  "inputs": {
+    "contract_sha256": "<64 hexadecimal characters>",
+    "capture_sha256": ["<64 hexadecimal characters>"]
+  },
+  "capture": {
+    "sample_count": 3,
+    "time_range_s": [-0.001, 0.001]
+  },
   "passed": true,
   "events": {},
   "findings": []
@@ -63,6 +71,12 @@ The report includes both the report schema version and PowerContract version:
 ```
 
 Each finding can include the requirement ID, status, measured value, limits, margin, unit, uncertainty, and source.
+
+Hashes are SHA-256 digests of the exact file bytes parsed, including any byte-order mark or newline differences. Each input is read once so a later file change cannot alter the report's input identity. `capture_sha256` follows command-line order: the primary capture, then each `--with` file, including supplied channels unused by the contract. Paths, filenames and instrument metadata are not added to the report.
+
+`sample_count` is the number of samples on the validated shared time axis, not a sum across channels. `time_range_s` contains its first and last timestamps in seconds; it is not an acquisition date or a claim of continuous measurement coverage. Hashes identify input bytes, but do not authenticate them or prove that files came from the same acquisition. Keep the inputs alongside the report when reproducibility matters.
+
+The `inputs` and `capture` objects are additive fields in schema version 1. Consumers should tolerate unknown fields; older reports may omit these objects. Existing findings and exit codes are unchanged.
 
 Store the report as a build artifact if you need to keep electrical-check results with a hardware or firmware revision.
 
