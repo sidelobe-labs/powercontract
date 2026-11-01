@@ -62,6 +62,8 @@ Crossing times are linearly interpolated between adjacent samples.
 
 If `stable_for` is set, the signal must stay on the requested side of the threshold for the full interval. If the capture ends before that interval can be checked, the event is not reported.
 
+A crossing at the final sample cannot establish a positive stability interval, even when the capture timestamps have a large offset. Requirements that depend on an unreported event are `INDETERMINATE`.
+
 ## Requirements
 
 ### `delay`
