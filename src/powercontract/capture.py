@@ -327,6 +327,8 @@ def _load_legacy_metadata_xy_csv(lines: list[str], contract: Contract, path: Pat
     values: list[float] = []
     for row_number, line in enumerate(lines, start=1):
         fields = _row(line)
+        if len(fields) > 5:
+            raise CaptureError(f"{path}: row {row_number} has more than five fields")
         if len(fields) <= 3:
             continue
         try:
