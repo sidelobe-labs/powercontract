@@ -60,6 +60,10 @@ events:
 
 Crossing times are linearly interpolated between adjacent samples.
 
+Evaluation retains each crossing's offset from a nearby sample. Delays, rise/fall times and voltage-window boundaries use that offset before converting the crossing to an absolute timestamp. This preserves short intervals at large time origins and late in long captures. Input timestamps and interpolation still use floating-point numbers; precision already missing from the input cannot be recovered.
+
+The JSON `events` object continues to contain absolute floating-point timestamps. Two nearby crossings can therefore have the same rounded timestamp in that object while a finding reports a non-zero interval. Use the finding's `measured` value rather than subtracting the reported event timestamps. A timing interval outside the representable numeric range is `INDETERMINATE`.
+
 If `stable_for` is set, the signal must stay on the requested side of the threshold for the full interval. If the capture ends before that interval can be checked, the event is not reported.
 
 A crossing at the final sample cannot establish a positive stability interval, even when the capture timestamps have a large offset. Requirements that depend on an unreported event are `INDETERMINATE`.
