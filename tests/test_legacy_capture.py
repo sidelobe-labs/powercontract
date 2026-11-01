@@ -56,3 +56,24 @@ def test_legacy_capture_allows_rows_without_waveform_data(tmp_path, capsys, midd
     report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
     assert report["passed"] is True
     assert report["findings"][0]["measured"] == 3.3
+
+
+@pytest.mark.parametrize("extra_fields", [",999", ",,999", ",invalid", ",,0"])
+def test_legacy_capture_rejects_extra_sample_fields(tmp_path, capsys, extra_fields):
+    result = check_legacy_capture(tmp_path, f"Trigger Point,1,Samples,0.001,3.3{extra_fields}")
+
+    assert result == 2
+    output = capsys.readouterr()
+    assert "row 2 has more than five fields" in output.err
+    assert "PASS" not in output.out
+    assert not (tmp_path / "report.json").exists()
+
+
+@pytest.mark.parametrize("trailing_fields", [",", ",,", ", , "])
+def test_legacy_capture_allows_trailing_empty_fields(tmp_path, capsys, trailing_fields):
+    assert check_legacy_capture(tmp_path, f"Trigger Point,1,Samples,0.001,3.3{trailing_fields}") == 0
+
+    assert "PASS" in capsys.readouterr().out
+    report = json.loads((tmp_path / "report.json").read_text(encoding="utf-8"))
+    assert report["passed"] is True
+    assert report["findings"][0]["measured"] == 3.3
