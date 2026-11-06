@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- reject non-empty fields after the declared channels in Rigol sequence CSV sample rows instead of ignoring them.
 - retain local crossing offsets when calculating delays, transitions and voltage windows, preventing rounded absolute timestamps from producing incorrect results.
 - evaluate event stability on a local time axis so short intervals and interpolated crossing offsets do not round away at large timestamps.
 - reject non-empty fields after the sample value in Tektronix five-column CSV files instead of silently discarding them.
