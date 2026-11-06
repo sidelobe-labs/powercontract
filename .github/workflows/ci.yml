@@ -20,6 +20,7 @@ jobs:
       - run: pytest
       - run: powercontract --version
       - run: powercontract check examples/boot.csv examples/boot.yaml
+      - run: powercontract batch examples/runs.json examples/boot.yaml --json /tmp/powercontract-batch.json
       - run: >-
           powercontract check
           examples/esp32-c3/usr_wf_C2_data.csv

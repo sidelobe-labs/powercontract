@@ -6,19 +6,16 @@ The PyPI publisher and GitHub `pypi` environment are already configured for the 
 
 ## Normal release
 
-Before running the release workflow:
+Prepare and review the release on a pull request:
 
 1. update `src/powercontract/__init__.py` to the new version;
 2. add the release to `CHANGELOG.md`;
-3. merge those changes to the default branch;
-4. confirm that CI is green.
+3. confirm that the pull request CI and package checks pass;
+4. review the release contents before merging to `main`.
 
-Then:
+Merging a change to `src/powercontract/__init__.py` into `main` automatically starts the Release workflow. That workflow creates the version tag, GitHub Release and PyPI publication. Do not dispatch a second release workflow after the merge.
 
-1. open **Actions** on GitHub;
-2. select **Release**;
-3. choose **Run workflow**;
-4. run it from the default branch.
+The workflow can also be dispatched manually from `main`, for example when a prepared version has not yet been tagged. Check the existing workflow run and tag first; an existing tag causes the workflow to stop.
 
 The workflow reads the version from the built wheel. You do not type the version into the Actions form.
 
@@ -42,11 +39,7 @@ If those checks pass, the same workflow:
 
 If the current version already has a release tag, the workflow stops instead of overwriting it.
 
-## Tag-triggered release
-
-A manually pushed tag matching `v[0-9]*` also starts the release workflow.
-
-When started by a tag, the workflow verifies that the tag matches the version read from the built wheel before creating the release or publishing to PyPI.
+The workflow does not run on tag pushes. It creates the tag itself after checking the built package and requires the default branch.
 
 ## PyPI authentication
 
