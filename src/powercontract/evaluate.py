@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from bisect import bisect_right
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from math import fsum, isfinite
 
@@ -356,15 +357,15 @@ def _values_in_window(
     values: tuple[float, ...],
     start: _TimePoint,
     end: _TimePoint,
-) -> tuple[float, ...]:
+) -> Iterator[float]:
+    yield _value_at(times, values, start)
     if start == end:
-        return (_value_at(times, values, start),)
-    result = [_value_at(times, values, start)]
+        return
     first = start.index + (start.offset >= 0)
     stop = end.index + (end.offset > 0)
-    result.extend(values[first:stop])
-    result.append(_value_at(times, values, end))
-    return tuple(result)
+    for index in range(first, stop):
+        yield values[index]
+    yield _value_at(times, values, end)
 
 
 def _value_at(times: tuple[float, ...], values: tuple[float, ...], point: _TimePoint) -> float:

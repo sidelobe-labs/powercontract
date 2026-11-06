@@ -1,5 +1,7 @@
 # PowerContract
 
+For repeated independent acquisitions, use the [batch command](https://github.com/sidelobe-labs/powercontract/blob/main/docs/batch.md) with an explicit capture manifest.
+
 [![PyPI version](https://img.shields.io/pypi/v/powercontract.svg)](https://pypi.org/project/powercontract/)
 [![Python versions](https://img.shields.io/pypi/pyversions/powercontract.svg)](https://pypi.org/project/powercontract/)
 [![CI](https://github.com/sidelobe-labs/powercontract/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/sidelobe-labs/powercontract/actions/workflows/ci.yml)

@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+## 0.2.0 - release preparation
+
 ### Added
+
+- evaluate repeated independent acquisitions with `batch`, an explicit JSON manifest and an aggregate report that preserves per-run errors and provenance.
 
 - include exact-byte contract and capture SHA-256 hashes, sample count and capture time range in JSON reports, without adding input paths.
 
 ### Fixed
+
+- reject malformed YAML references, overflowing numeric scalars and invalid UTF-8 through the normal input-error path.
+- stream voltage-window samples into extrema calculations instead of copying whole windows.
 
 - reject non-empty fields after the declared channels in Rigol sequence CSV sample rows instead of ignoring them.
 - retain local crossing offsets when calculating delays, transitions and voltage windows, preventing rounded absolute timestamps from producing incorrect results.

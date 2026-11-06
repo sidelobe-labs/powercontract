@@ -68,6 +68,8 @@ def load_contract(path: str | Path) -> Contract:
         data = yaml.load(content.decode("utf-8"), Loader=_ContractLoader)
     except OSError as exc:
         raise SpecError(f"cannot read contract: {exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise SpecError(f"contract {path} must be UTF-8 text") from exc
     except yaml.YAMLError as exc:
         raise SpecError(f"invalid YAML: {exc}") from exc
     return replace(parse_contract(data), source_sha256=sha256(content).hexdigest())
@@ -77,7 +79,7 @@ def parse_contract(data: object) -> Contract:
     if not isinstance(data, dict):
         raise SpecError("contract root must be a mapping")
     _reject_unknown_keys(data, _ROOT_KEYS, "contract")
-    if data.get("version") != 1:
+    if type(data.get("version")) is not int or data["version"] != 1:
         raise SpecError("contract version must be 1")
 
     capture = _mapping(data.get("capture"), "capture")
@@ -111,7 +113,7 @@ def parse_contract(data: object) -> Contract:
         item = _mapping(raw, f"events.{name}")
         _reject_unknown_keys(item, _EVENT_KEYS, f"events.{name}")
         signal = item.get("signal")
-        if signal not in signals:
+        if not isinstance(signal, str) or signal not in signals:
             raise SpecError(f"events.{name}.signal refers to unknown signal {signal!r}")
         direction = item.get("direction")
         if direction not in ("above", "below"):
@@ -138,7 +140,7 @@ def parse_contract(data: object) -> Contract:
         if req_id in seen:
             raise SpecError(f"duplicate requirement id {req_id!r}")
         seen.add(req_id)
-        if req_type not in _SUPPORTED_REQUIREMENTS:
+        if not isinstance(req_type, str) or req_type not in _SUPPORTED_REQUIREMENTS:
             raise SpecError(f"requirement {req_id!r} has unsupported type {req_type!r}")
         req_type = str(req_type)
         _reject_unknown_keys(item, _REQUIREMENT_KEYS[req_type], f"requirement {req_id!r}")
@@ -167,7 +169,7 @@ def _reject_unknown_keys(item: dict, allowed: set[str], field: str) -> None:
 def _validate_requirement(req_id: str, req_type: str, item: dict, signals: dict, events: dict) -> None:
     if req_type == "delay":
         start, end = item.get("from"), item.get("to")
-        if start not in events or end not in events:
+        if not isinstance(start, str) or not isinstance(end, str) or start not in events or end not in events:
             raise SpecError(f"{req_id}: delay requires existing 'from' and 'to' events")
         if "min" not in item and "max" not in item:
             raise SpecError(f"{req_id}: delay requires min and/or max")
@@ -178,7 +180,7 @@ def _validate_requirement(req_id: str, req_type: str, item: dict, signals: dict,
         if "uncertainty" in item:
             duration_seconds(item["uncertainty"], field=f"{req_id}.uncertainty")
     elif req_type in {"max_value", "min_value"}:
-        if item.get("signal") not in signals:
+        if not isinstance(item.get("signal"), str) or item["signal"] not in signals:
             raise SpecError(f"{req_id}: unknown signal {item.get('signal')!r}")
         finite_float(item.get("value"), field=f"{req_id}.value")
         if "uncertainty" in item:
@@ -189,7 +191,7 @@ def _validate_requirement(req_id: str, req_type: str, item: dict, signals: dict,
         _validate_optional_event(req_id, "to", item, events)
     elif req_type in {"rise_time", "fall_time"}:
         signal = item.get("signal")
-        if signal not in signals:
+        if not isinstance(signal, str) or signal not in signals:
             raise SpecError(f"{req_id}: unknown signal {signal!r}")
         if signals[signal].nominal is None:
             raise SpecError(f"{req_id}: {req_type} requires signals.{signal}.nominal")
@@ -205,5 +207,5 @@ def _validate_requirement(req_id: str, req_type: str, item: dict, signals: dict,
 
 
 def _validate_optional_event(req_id: str, key: str, item: dict, events: dict) -> None:
-    if key in item and item[key] not in events:
+    if key in item and (not isinstance(item[key], str) or item[key] not in events):
         raise SpecError(f"{req_id}: {key} refers to unknown event {item[key]!r}")

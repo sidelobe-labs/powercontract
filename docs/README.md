@@ -11,7 +11,7 @@ Start with [Getting started](getting-started.md) if you have a scope export and 
 - [Input formats](input-formats.md): CSV layouts accepted by the parser.
 - [Oscilloscope vendor notes](vendors.md): export notes and compatibility limits for Siglent, Rigol, Keysight, Tektronix, and Teledyne LeCroy.
 - [CI usage](ci.md): exit codes, JSON reports, and a GitHub Actions example.
-- [Publishing a release](releasing.md): PyPI Trusted Publishing and the tag release flow.
+- [Publishing a release](releasing.md): automatic publication from reviewed version changes and PyPI Trusted Publishing.
 - [Troubleshooting](troubleshooting.md): common input and contract errors.
 
 PowerContract evaluates exported waveform data. It does not acquire waveforms, control instruments, or decode protocols.

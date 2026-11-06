@@ -37,7 +37,7 @@ def finite_float(value: object, *, field: str) -> float:
         raise SpecError(f"{field} must be numeric")
     try:
         result = float(value)
-    except (TypeError, ValueError) as exc:
+    except (TypeError, ValueError, OverflowError) as exc:
         raise SpecError(f"{field} must be numeric") from exc
     if result != result or result in (float("inf"), float("-inf")):
         raise SpecError(f"{field} must be finite")

@@ -50,7 +50,10 @@ def _read_source(path: Path) -> tuple[list[str], str]:
         content = path.read_bytes()
     except OSError as exc:
         raise CaptureError(f"cannot read capture {path}: {exc}") from exc
-    lines = content.decode("utf-8-sig").splitlines()
+    try:
+        lines = content.decode("utf-8-sig").splitlines()
+    except UnicodeDecodeError as exc:
+        raise CaptureError(f"capture {path} must be UTF-8 text") from exc
     if not lines:
         raise CaptureError(f"capture {path} is empty")
     return lines, sha256(content).hexdigest()

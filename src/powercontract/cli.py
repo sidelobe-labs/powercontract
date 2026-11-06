@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
+from .batch import evaluate_runs, evaluation_report, load_runs
 from .capture import load_capture
 from .errors import PowerContractError
 from .evaluate import evaluate
@@ -37,11 +38,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="add another per-channel capture file from the same acquisition",
     )
     check.add_argument("--json", dest="json_path", type=Path, help="write a machine-readable report")
+    batch = sub.add_parser("batch", help="evaluate independent acquisitions from a JSON manifest")
+    batch.add_argument("manifest", type=Path)
+    batch.add_argument("contract", type=Path)
+    batch.add_argument("--json", dest="json_path", type=Path, required=True, help="write the aggregate report")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "batch":
+        return _batch(args)
     try:
         contract = load_contract(args.contract)
         capture = load_capture(args.capture, contract, args.additional_captures)
@@ -71,17 +78,7 @@ def main(argv: list[str] | None = None) -> int:
         payload = {
             "schema_version": 1,
             "powercontract_version": __version__,
-            "inputs": {
-                "contract_sha256": contract.source_sha256,
-                "capture_sha256": list(capture.source_sha256),
-            },
-            "capture": {
-                "sample_count": len(capture.time),
-                "time_range_s": [capture.time[0], capture.time[-1]],
-            },
-            "passed": result.passed,
-            "events": result.events,
-            "findings": [finding.as_dict() for finding in result.findings],
+            **evaluation_report(contract, capture, result),
         }
         try:
             args.json_path.write_text(
@@ -93,6 +90,24 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     return 0 if result.passed else 1
+
+
+def _batch(args) -> int:
+    try:
+        contract = load_contract(args.contract)
+        runs = load_runs(args.manifest)
+        inputs = [args.contract, args.manifest, *(path for _, paths in runs for path in paths)]
+        if args.json_path.resolve() in {path.resolve() for path in inputs}:
+            raise PowerContractError("batch report must not overwrite an input")
+        reports, exit_code = evaluate_runs(contract, runs)
+        payload = {"schema_version": 1, "powercontract_version": __version__, "runs": reports}
+        args.json_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    except (PowerContractError, OSError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    for report in reports:
+        print(f"{report['status']:<13} {report['label']}")
+    return exit_code
 
 
 if __name__ == "__main__":
