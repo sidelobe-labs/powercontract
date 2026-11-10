@@ -45,8 +45,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         contract = load_contract(args.contract)
         capture = load_capture(args.capture, contract, args.additional_captures)
+        if args.json_path is not None and args.json_path.exists():
+            inputs = [args.contract, args.capture, *args.additional_captures]
+            if any(args.json_path.samefile(path) for path in inputs):
+                raise PowerContractError("JSON report must not overwrite an input")
         result = evaluate(contract, capture)
-    except PowerContractError as exc:
+    except (PowerContractError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
