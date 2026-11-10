@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.3 - 2026-11-10
+
 ### Added
 
 - include exact-byte contract and capture SHA-256 hashes, sample count and capture time range in JSON reports, without adding input paths.
@@ -13,6 +15,7 @@
 - evaluate event stability on a local time axis so short intervals and interpolated crossing offsets do not round away at large timestamps.
 - reject non-empty fields after the sample value in Tektronix five-column CSV files instead of silently discarding them.
 - reject incomplete or non-numeric samples in Tektronix five-column CSV files instead of skipping them.
+- reject extra fields in source-and-units and paired-XY CSV sample rows instead of silently discarding them.
 
 ## 0.1.2 - 2026-10-20
 
