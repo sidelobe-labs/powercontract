@@ -72,7 +72,13 @@ def test_nan_uncertainty_does_not_make_a_failing_rise_pass(tmp_path, capsys):
 
 
 @pytest.mark.parametrize(
-    ("maximum", "expected"), [("100 us", 1), ("1 ms", 0), ("0.001", 0), ("0", 1)]
+    ("maximum", "expected"),
+    [
+        ("100 us", 1), ("1 ms", 0), ("0.001", 0), ("0", 1),
+        ("100 µs", 1), ("1000 µs", 0),
+        ("100 μs", 1), ("1000 μs", 0),
+        ("100 ΜS", 1), ("1000 ΜS", 0),
+    ],
 )
 def test_finite_rise_time_limits_keep_their_verdict(tmp_path, capsys, maximum, expected):
     text = dedent(f"""\
