@@ -6,7 +6,7 @@ from math import isfinite
 from .errors import SpecError
 
 _DURATION_RE = re.compile(r"^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(s|ms|us|µs|ns)?\s*$", re.I)
-_DURATION_SCALE = {"s": 1.0, "ms": 1e-3, "us": 1e-6, "µs": 1e-6, "ns": 1e-9}
+_DURATION_SCALE = {"s": 1.0, "ms": 1e-3, "us": 1e-6, "μs": 1e-6, "ns": 1e-9}
 
 
 def duration_seconds(value: object, *, field: str) -> float:
@@ -22,7 +22,7 @@ def duration_seconds(value: object, *, field: str) -> float:
         if not match:
             raise SpecError(f"{field} has invalid duration {value!r}")
         number, unit = match.groups()
-        result = float(number) * _DURATION_SCALE[(unit or "s").lower()]
+        result = float(number) * _DURATION_SCALE[(unit or "s").casefold()]
     else:
         raise SpecError(f"{field} must be a duration")
     if not isfinite(result):
