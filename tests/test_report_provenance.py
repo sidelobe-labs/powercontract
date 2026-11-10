@@ -71,6 +71,53 @@ def test_report_hashes_all_capture_files_in_argument_order(tmp_path):
     assert payload["capture"] == {"sample_count": 2, "time_range_s": [-0.001, 0.0]}
 
 
+@pytest.mark.parametrize("target", ["capture", "contract", "additional", "relative", "symlink", "hardlink"])
+def test_report_cannot_overwrite_input(tmp_path, monkeypatch, capsys, target):
+    contract = tmp_path / "contract.yaml"
+    capture = tmp_path / "capture.csv"
+    additional = tmp_path / "additional.csv"
+    originals = {
+        contract: write_contract(contract, column="CH1"),
+        capture: write_siglent(capture, "CH1"),
+        additional: write_siglent(additional, "CH2"),
+    }
+    if target == "relative":
+        monkeypatch.chdir(tmp_path)
+        report = Path("capture.csv")
+    elif target in {"symlink", "hardlink"}:
+        report = tmp_path / "report.json"
+        try:
+            if target == "symlink":
+                report.symlink_to(capture)
+            else:
+                report.hardlink_to(capture)
+        except OSError as exc:
+            pytest.skip(f"{target} unavailable: {exc}")
+    else:
+        report = {"capture": capture, "contract": contract, "additional": additional}[target]
+
+    assert main([
+        "check", str(capture), str(contract), "--with", str(additional), "--json", str(report),
+    ]) == 2
+
+    assert {path: path.read_bytes() for path in originals} == originals
+    output = capsys.readouterr()
+    assert "must not overwrite an input" in output.err
+    assert "PASS" not in output.out
+
+
+def test_report_can_replace_previous_report(tmp_path):
+    contract = tmp_path / "contract.yaml"
+    capture = tmp_path / "capture.csv"
+    report = tmp_path / "report.json"
+    write_contract(contract, column="CH1")
+    write_siglent(capture, "CH1")
+    report.write_text("previous report")
+
+    assert main(["check", str(capture), str(contract), "--json", str(report)]) == 0
+    assert json.loads(report.read_text())["passed"] is True
+
+
 @pytest.mark.parametrize("format", ["table", "siglent", "siglent-group"])
 def test_inputs_are_read_once_and_hashed_before_they_can_change(tmp_path, monkeypatch, format):
     contract = tmp_path / "contract.yaml"

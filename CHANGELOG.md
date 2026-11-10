@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- reject JSON report paths that refer to the contract or a capture file, including symbolic and hard links, instead of overwriting input data.
 - retain local crossing offsets when calculating delays, transitions and voltage windows, preventing rounded absolute timestamps from producing incorrect results.
 - evaluate event stability on a local time axis so short intervals and interpolated crossing offsets do not round away at large timestamps.
 - reject non-empty fields after the sample value in Tektronix five-column CSV files instead of silently discarding them.

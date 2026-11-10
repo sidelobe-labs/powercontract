@@ -50,6 +50,10 @@ An `INDETERMINATE` result returns exit code 1. A CI job therefore fails when the
 
 ## JSON report
 
+The report path must be separate from the contract and all capture files, including
+files supplied with `--with`. Paths that refer to an input through a symbolic or
+hard link are also rejected with exit code 2. An existing report can be replaced.
+
 The report includes the report schema and PowerContract versions, input hashes, and the evaluated capture's sample count and time range:
 
 ```json
