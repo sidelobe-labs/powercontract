@@ -22,7 +22,7 @@ jobs:
           python-version: "3.12"
 
       # Pin the version your project has validated.
-      - run: python -m pip install powercontract==0.1.0
+      - run: python -m pip install powercontract==0.1.3
 
       - name: Check power-up capture
         run: |
@@ -38,7 +38,7 @@ jobs:
           path: power-up-report.json
 ```
 
-Pin the PowerContract version used by CI so electrical checks do not change when a new package release is published.
+Pin the PowerContract version used by CI so electrical checks do not change when a new package release is published. The input hashes, capture summary, and input overwrite protection described below require PowerContract 0.1.3 or later.
 
 ## Exit codes
 
@@ -59,7 +59,7 @@ The report includes the report schema and PowerContract versions, input hashes, 
 ```json
 {
   "schema_version": 1,
-  "powercontract_version": "0.1.2",
+  "powercontract_version": "0.1.3",
   "inputs": {
     "contract_sha256": "<64 hexadecimal characters>",
     "capture_sha256": ["<64 hexadecimal characters>"]
